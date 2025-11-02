@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { createClient } from "@supabase/supabase-js";
 
@@ -18,6 +18,38 @@ export default function UploadPage() {
   const [uploading, setUploading] = useState(false);
 
   const MAX_SIZE = 50 * 1024 * 1024; // 50 MB 限制
+
+  // 🧠 這裡加入 Realtime 訂閱，偵測分析狀態更新
+  useEffect(() => {
+    if (!email) return;
+
+    const channel = supabase
+      .channel("job-status")
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "jobs",
+          filter: `user_email=eq.${email}`,
+        },
+        (payload) => {
+          console.log("🧩 收到狀態更新:", payload.new.status);
+          const newStatus = payload.new.status;
+
+          if (newStatus === "done") {
+            setMessage("✅ 分析完成！點擊下方按鈕查看結果");
+          } else if (newStatus === "failed") {
+            setMessage("❌ 分析失敗，請稍後再試");
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [email]);
 
   const handleUpload = async () => {
     if (!email || !file) {
@@ -105,14 +137,23 @@ export default function UploadPage() {
           {uploading ? "上傳中…" : "上傳並分析"}
         </button>
 
+        {/* 🧩 顯示狀態訊息 */}
         {message && (
-          <p className="text-center text-sm text-zinc-800 dark:text-zinc-300 mt-3">
-            {message}
-          </p>
+          <div className="text-center text-sm text-zinc-800 dark:text-zinc-300 mt-3 space-y-2">
+            <p>{message}</p>
+            {message.includes("分析完成") && (
+              <Link
+                href={`/result?email=${email}`}
+                className="inline-block px-5 py-2 mt-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition"
+              >
+                🎥 查看分析結果
+              </Link>
+            )}
+          </div>
         )}
       </div>
 
-      {/* ✅ ← 回首頁按鈕 */}
+      {/* ← 回首頁按鈕 */}
       <div className="absolute bottom-6">
         <Link
           href="/"
