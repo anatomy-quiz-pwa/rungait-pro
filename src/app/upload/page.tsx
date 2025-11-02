@@ -19,52 +19,52 @@ export default function UploadPage() {
 
   const MAX_SIZE = 50 * 1024 * 1024; // 50 MB 限制
 
-    // 🧠 Realtime 訂閱，偵測分析狀態更新
-    useEffect(() => {
-        // ⚠️ 只有當 email 存在，且目前沒有在上傳中時才啟用
-        if (!email || uploading) {
-            console.log("⚠️ 尚未輸入 email 或仍在上傳中，不啟用 Realtime");
-            return;
+  // 🧠 Realtime 訂閱：偵測分析狀態更新
+  useEffect(() => {
+    if (!email) {
+      console.log("⚠️ 尚未輸入 email，不啟用 Realtime");
+      return;
+    }
+
+    console.log("🔔 啟用 Realtime 訂閱 for:", email);
+
+    const channel = supabase
+      .channel(`job-status-${email}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "jobs",
+          filter: `user_email=eq.'${email}'`, // 有引號才能匹配含 @ 的字串
+        },
+        (payload) => {
+          console.log("🧩 收到更新事件:", payload);
+          const data = payload.new as { status?: string; error_msg?: string };
+          const status = data?.status;
+
+          if (status === "processing") {
+            setMessage("🕐 分析中，請稍候...");
+          } else if (status === "done") {
+            setMessage("✅ 分析完成！點擊下方按鈕查看結果");
+            setUploading(false);
+          } else if (status === "failed") {
+            setMessage(`❌ 分析失敗：${data.error_msg || "未知錯誤"}`);
+            setUploading(false);
+          }
         }
+      )
+      .subscribe((status) => {
+        console.log("📡 訂閱狀態:", status);
+      });
 
-        console.log("🔔 啟用 Realtime 訂閱 for:", email);
+    return () => {
+      console.log("❎ 移除 Realtime 訂閱");
+      supabase.removeChannel(channel);
+    };
+  }, [email]); // ✅ 只在 email 改變時重建訂閱
 
-        const channel = supabase
-            .channel(`job-status-${email}`)
-            .on(
-            "postgres_changes",
-            {
-                event: "*",
-                schema: "public",
-                table: "jobs",
-                filter: `user_email=eq.'${email}'`, // 有引號才能匹配含 @ 的字串
-            },
-            (payload) => {
-                console.log("🧩 收到更新事件:", payload);
-                const data = payload.new as { status?: string; error_msg?: string };
-                const status = data?.status;
-
-                if (status === "processing") {
-                setMessage("🕐 分析中，請稍候...");
-                } else if (status === "done") {
-                setMessage("✅ 分析完成！點擊下方按鈕查看結果");
-                setUploading(false);
-                } else if (status === "failed") {
-                setMessage(`❌ 分析失敗：${data.error_msg || "未知錯誤"}`);
-                setUploading(false);
-                }
-            }
-            )
-            .subscribe((status) => {
-            console.log("📡 訂閱狀態:", status);
-            });
-
-        return () => {
-            console.log("❎ 移除 Realtime 訂閱");
-            supabase.removeChannel(channel);
-        };
-    }, [email, uploading]);
-
+  // 🧩 上傳影片
   const handleUpload = async () => {
     if (!email || !file) {
       setMessage("請輸入 Email 並選擇影片");
@@ -79,28 +79,31 @@ export default function UploadPage() {
     setMessage("上傳中…");
 
     try {
-    const filePath = `${email}/${Date.now()}_${file.name}`;
-    const { error: uploadError } = await supabase.storage
+      const filePath = `${email}/${Date.now()}_${file.name}`;
+      const { error: uploadError } = await supabase.storage
         .from("videos")
         .upload(filePath, file);
-    if (uploadError) throw uploadError;
 
-    const { error: insertError } = await supabase
+      if (uploadError) throw uploadError;
+
+      const { error: insertError } = await supabase
         .from("jobs")
         .insert({
-        user_email: email,
-        frame_count: frameCount,
-        storage_path: filePath,
-        status: "pending",
-        orig_filename: file.name,
+          user_email: email,
+          frame_count: frameCount,
+          storage_path: filePath,
+          status: "pending",
+          orig_filename: file.name,
         });
-    if (insertError) throw insertError;
 
-    setMessage("✅ 影片已上傳成功，正在分析中…");
+      if (insertError) throw insertError;
+
+      // ✅ 上傳結束後立刻開放 Realtime 可以接收到 processing/done
+      setUploading(false);
+      setMessage("✅ 影片已上傳成功，正在分析中…");
     } catch (err: any) {
-    setMessage(`❌ 發生錯誤：${err.message}`);
-    } finally {
-    // ❗這裡不馬上 setUploading(false)，讓分析中仍顯示 loading 狀態
+      setMessage(`❌ 發生錯誤：${err.message}`);
+      setUploading(false);
     }
   };
 
