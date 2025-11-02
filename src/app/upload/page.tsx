@@ -21,55 +21,50 @@ export default function UploadPage() {
 
     // 🧠 Realtime 訂閱，偵測分析狀態更新
     useEffect(() => {
-    if (!email) {
-        console.log("⚠️ 尚未輸入 email，不啟用 Realtime");
-        return;
-    }
+        // ⚠️ 只有當 email 存在，且目前沒有在上傳中時才啟用
+        if (!email || uploading) {
+            console.log("⚠️ 尚未輸入 email 或仍在上傳中，不啟用 Realtime");
+            return;
+        }
 
-    console.log("🔔 啟用 Realtime 訂閱 for:", email);
+        console.log("🔔 啟用 Realtime 訂閱 for:", email);
 
-    const channel = supabase
-        .channel(`job-status-${email}`)
-        .on(
-        "postgres_changes",
-        {
-            event: "*",
-            schema: "public",
-            table: "jobs",
-            filter: `user_email=eq.'${email}'`, // ✅ 確保有引號
-        },
-        (payload) => {
-            console.log("🧩 收到更新事件:", payload);
-            const data = payload.new as { status?: string; error_msg?: string };
-            const status = data?.status;
+        const channel = supabase
+            .channel(`job-status-${email}`)
+            .on(
+            "postgres_changes",
+            {
+                event: "*",
+                schema: "public",
+                table: "jobs",
+                filter: `user_email=eq.'${email}'`, // 有引號才能匹配含 @ 的字串
+            },
+            (payload) => {
+                console.log("🧩 收到更新事件:", payload);
+                const data = payload.new as { status?: string; error_msg?: string };
+                const status = data?.status;
 
-            switch (status) {
-            case "processing":
+                if (status === "processing") {
                 setMessage("🕐 分析中，請稍候...");
-                break;
-            case "done":
+                } else if (status === "done") {
                 setMessage("✅ 分析完成！點擊下方按鈕查看結果");
-                setUploading(false); // ✅ 結束上傳狀態
-                break;
-            case "failed":
+                setUploading(false);
+                } else if (status === "failed") {
                 setMessage(`❌ 分析失敗：${data.error_msg || "未知錯誤"}`);
                 setUploading(false);
-                break;
-            default:
-                console.log("ℹ️ 未知狀態:", status);
+                }
             }
-        }
-        )
-        .subscribe((status) => {
-        console.log("📡 訂閱狀態:", status);
-        });
+            )
+            .subscribe((status) => {
+            console.log("📡 訂閱狀態:", status);
+            });
 
-    // ✅ 清理避免多重訂閱
-    return () => {
-        console.log("❎ 移除 Realtime 訂閱");
-        supabase.removeChannel(channel);
-    };
-    }, [email]);
+        return () => {
+            console.log("❎ 移除 Realtime 訂閱");
+            supabase.removeChannel(channel);
+        };
+    }, [email, uploading]);
+
   const handleUpload = async () => {
     if (!email || !file) {
       setMessage("請輸入 Email 並選擇影片");
