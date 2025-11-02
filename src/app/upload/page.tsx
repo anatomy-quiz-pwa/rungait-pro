@@ -37,7 +37,8 @@ export default function UploadPage() {
         },
         (payload) => {
             console.log("🧩 收到更新:", payload);
-            const status = payload.new?.status;
+            const data = payload.new as { status?: string };
+            const status = data?.status;
 
             if (status === "done") {
             setMessage("✅ 分析完成！點擊下方按鈕查看結果");
