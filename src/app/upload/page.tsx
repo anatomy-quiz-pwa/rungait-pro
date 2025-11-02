@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { createClient } from "@supabase/supabase-js";
+import { useRef } from "react";
 
 // ✅ 初始化 Supabase（使用環境變數）
 const supabase = createClient(
@@ -16,53 +17,55 @@ export default function UploadPage() {
   const [file, setFile] = useState<File | null>(null);
   const [message, setMessage] = useState("");
   const [uploading, setUploading] = useState(false);
-
+  const subscribedRef = useRef(false);
   const MAX_SIZE = 50 * 1024 * 1024; // 50 MB 限制
 
   // 🧠 Realtime 訂閱：偵測分析狀態更新
   useEffect(() => {
     if (!email) {
-      console.log("⚠️ 尚未輸入 email，不啟用 Realtime");
-      return;
+        console.log("⚠️ 尚未輸入 email，不啟用 Realtime");
+        return;
+    }
+    if (subscribedRef.current) {
+        console.log("⚙️ 已訂閱過，略過重複訂閱");
+        return;
     }
 
     console.log("🔔 啟用 Realtime 訂閱 for:", email);
+    subscribedRef.current = true;
 
     const channel = supabase
-      .channel(`job-status-${email}`)
-      .on(
+        .channel(`job-status-${email}`)
+        .on(
         "postgres_changes",
         {
-          event: "*",
-          schema: "public",
-          table: "jobs",
-          filter: `user_email=eq.'${email}'`, // 有引號才能匹配含 @ 的字串
+            event: "*",
+            schema: "public",
+            table: "jobs",
+            filter: `user_email=eq.'${email}'`,
         },
         (payload) => {
-          console.log("🧩 收到更新事件:", payload);
-          const data = payload.new as { status?: string; error_msg?: string };
-          const status = data?.status;
+            console.log("🧩 收到更新事件:", payload);
+            const data = payload.new as { status?: string; error_msg?: string };
+            const status = data?.status;
 
-          if (status === "processing") {
-            setMessage("🕐 分析中，請稍候...");
-          } else if (status === "done") {
+            if (status === "processing") setMessage("🕐 分析中，請稍候...");
+            else if (status === "done") {
             setMessage("✅ 分析完成！點擊下方按鈕查看結果");
             setUploading(false);
-          } else if (status === "failed") {
+            } else if (status === "failed") {
             setMessage(`❌ 分析失敗：${data.error_msg || "未知錯誤"}`);
             setUploading(false);
-          }
+            }
         }
-      )
-      .subscribe((status) => {
-        console.log("📡 訂閱狀態:", status);
-      });
+        )
+        .subscribe((status) => console.log("📡 訂閱狀態:", status));
 
     return () => {
-      console.log("❎ 移除 Realtime 訂閱");
-      supabase.removeChannel(channel);
+        console.log("❎ 卸載時移除 Realtime 訂閱");
+        supabase.removeChannel(channel);
     };
-  }, [email]); // ✅ 只在 email 改變時重建訂閱
+    }, [email]);
 
   // 🧩 上傳影片
   const handleUpload = async () => {
