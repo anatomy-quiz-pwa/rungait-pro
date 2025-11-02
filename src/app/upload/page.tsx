@@ -19,33 +19,44 @@ export default function UploadPage() {
 
   const MAX_SIZE = 50 * 1024 * 1024; // 50 MB 限制
 
-  // 🧠 這裡加入 Realtime 訂閱，偵測分析狀態更新
+    // 🧠 Realtime 訂閱，偵測分析狀態更新
     useEffect(() => {
-    if (!email) return;
+    if (!email) {
+        console.log("⚠️ 尚未輸入 email，不啟用 Realtime");
+        return;
+    }
 
     console.log("🔔 啟用 Realtime 訂閱 for:", email);
 
     const channel = supabase
-        .channel("job-status")
+        .channel(`job-status-${email}`)
         .on(
         "postgres_changes",
         {
-            event: "*", // ✅ 接收所有事件（包含 UPDATE, INSERT）
+            event: "*",
             schema: "public",
             table: "jobs",
-            filter: `user_email=eq.${email}`,
+            filter: `user_email=eq.'${email}'`, // ✅ 確保有引號
         },
         (payload) => {
-            console.log("🧩 收到更新:", payload);
-            const data = payload.new as { status?: string };
+            console.log("🧩 收到更新事件:", payload);
+            const data = payload.new as { status?: string; error_msg?: string };
             const status = data?.status;
 
-            if (status === "done") {
-            setMessage("✅ 分析完成！點擊下方按鈕查看結果");
-            } else if (status === "failed") {
-            setMessage("❌ 分析失敗，請稍後再試");
-            } else if (status === "processing") {
-            setMessage("🕐 分析中，請稍候...");
+            switch (status) {
+            case "processing":
+                setMessage("🕐 分析中，請稍候...");
+                break;
+            case "done":
+                setMessage("✅ 分析完成！點擊下方按鈕查看結果");
+                setUploading(false); // ✅ 結束上傳狀態
+                break;
+            case "failed":
+                setMessage(`❌ 分析失敗：${data.error_msg || "未知錯誤"}`);
+                setUploading(false);
+                break;
+            default:
+                console.log("ℹ️ 未知狀態:", status);
             }
         }
         )
@@ -53,12 +64,12 @@ export default function UploadPage() {
         console.log("📡 訂閱狀態:", status);
         });
 
+    // ✅ 清理避免多重訂閱
     return () => {
         console.log("❎ 移除 Realtime 訂閱");
         supabase.removeChannel(channel);
     };
     }, [email]);
-
   const handleUpload = async () => {
     if (!email || !file) {
       setMessage("請輸入 Email 並選擇影片");
@@ -73,30 +84,28 @@ export default function UploadPage() {
     setMessage("上傳中…");
 
     try {
-      const filePath = `${email}/${Date.now()}_${file.name}`;
-      const { error } = await supabase.storage
+    const filePath = `${email}/${Date.now()}_${file.name}`;
+    const { error: uploadError } = await supabase.storage
         .from("videos")
         .upload(filePath, file);
+    if (uploadError) throw uploadError;
 
-      if (error) throw error;
-
-      const { error: insertError } = await supabase
+    const { error: insertError } = await supabase
         .from("jobs")
         .insert({
-          user_email: email,
-          frame_count: frameCount,
-          storage_path: filePath,
-          status: "pending",
-          orig_filename: file.name,
+        user_email: email,
+        frame_count: frameCount,
+        storage_path: filePath,
+        status: "pending",
+        orig_filename: file.name,
         });
+    if (insertError) throw insertError;
 
-      if (insertError) throw insertError;
-
-      setMessage("✅ 影片已上傳成功，正在分析中…");
+    setMessage("✅ 影片已上傳成功，正在分析中…");
     } catch (err: any) {
-      setMessage(`❌ 發生錯誤：${err.message}`);
+    setMessage(`❌ 發生錯誤：${err.message}`);
     } finally {
-      setUploading(false);
+    // ❗這裡不馬上 setUploading(false)，讓分析中仍顯示 loading 狀態
     }
   };
 
@@ -151,7 +160,7 @@ export default function UploadPage() {
             <p>{message}</p>
             {message.includes("分析完成") && (
               <Link
-                href={`/result?email=${email}`}
+                href={`/result?email=${encodeURIComponent(email)}`}
                 className="inline-block px-5 py-2 mt-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition"
               >
                 🎥 查看分析結果
