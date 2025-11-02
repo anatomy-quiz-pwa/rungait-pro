@@ -20,36 +20,43 @@ export default function UploadPage() {
   const MAX_SIZE = 50 * 1024 * 1024; // 50 MB 限制
 
   // 🧠 這裡加入 Realtime 訂閱，偵測分析狀態更新
-  useEffect(() => {
-    if (!email) return;
+useEffect(() => {
+  if (!email) return;
 
-    const channel = supabase
-      .channel("job-status")
-      .on(
-        "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "jobs",
-          filter: `user_email=eq.${email}`,
-        },
-        (payload) => {
-          console.log("🧩 收到狀態更新:", payload.new.status);
-          const newStatus = payload.new.status;
+  console.log("🔔 啟用 Realtime 訂閱 for:", email);
 
-          if (newStatus === "done") {
-            setMessage("✅ 分析完成！點擊下方按鈕查看結果");
-          } else if (newStatus === "failed") {
-            setMessage("❌ 分析失敗，請稍後再試");
-          }
+  const channel = supabase
+    .channel("job-status")
+    .on(
+      "postgres_changes",
+      {
+        event: "*", // ✅ 接收所有事件（包含 UPDATE, INSERT）
+        schema: "public",
+        table: "jobs",
+        filter: `user_email=eq.${email}`,
+      },
+      (payload) => {
+        console.log("🧩 收到更新:", payload);
+        const status = payload.new?.status;
+
+        if (status === "done") {
+          setMessage("✅ 分析完成！點擊下方按鈕查看結果");
+        } else if (status === "failed") {
+          setMessage("❌ 分析失敗，請稍後再試");
+        } else if (status === "processing") {
+          setMessage("🕐 分析中，請稍候...");
         }
-      )
-      .subscribe();
+      }
+    )
+    .subscribe((status) => {
+      console.log("📡 訂閱狀態:", status);
+    });
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [email]);
+  return () => {
+    console.log("❎ 移除 Realtime 訂閱");
+    supabase.removeChannel(channel);
+  };
+}, [email]);
 
   const handleUpload = async () => {
     if (!email || !file) {
