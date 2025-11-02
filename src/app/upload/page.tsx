@@ -96,7 +96,7 @@ export default function UploadPage() {
     <main className="min-h-screen flex flex-col items-center justify-center bg-zinc-50 dark:bg-black p-6 transition-colors duration-500 relative">
       <div className="bg-white/10 dark:bg-zinc-900 backdrop-blur-md p-8 rounded-2xl shadow-lg w-full max-w-md space-y-5 border border-zinc-700">
         <h1 className="text-3xl font-bold text-center text-zinc-900 dark:text-zinc-100">
-          🎬 上傳影片進行分析
+          上傳影片進行分析
         </h1>
         <p className="text-center text-zinc-600 dark:text-zinc-400 text-sm">
           請上傳你的跑步影片（限制 50 MB），系統會自動進行姿勢分析。
