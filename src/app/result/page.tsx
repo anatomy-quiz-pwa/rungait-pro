@@ -1,13 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { createClient } from "@supabase/supabase-js";
 import Link from "next/link";
+import { supabase } from "@/lib/supabaseClient";
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
 
 export default function ResultPage() {
   const [email, setEmail] = useState("");
@@ -75,10 +71,10 @@ export default function ResultPage() {
                 <video
                   controls
                   className="w-full rounded-lg border border-zinc-700 mb-4"
-                  src={`${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/${job.result_video_path}`}
+                  src={`${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/results/${job.result_video_path}`}
                 />
                 <a
-                  href={`${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/${job.result_video_path}`}
+                  href={`${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/results/${job.result_video_path}`}
                   download
                   className="px-5 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition"
                 >
