@@ -22,18 +22,13 @@ export default function UploadPage() {
 
   // 🧠 Realtime 訂閱：偵測分析狀態更新
   useEffect(() => {
-    if (!email) {
-        console.log("⚠️ 尚未輸入 email，不啟用 Realtime");
-        return;
-    }
-    if (subscribedRef.current) {
-        console.log("⚙️ 已訂閱過，略過重複訂閱");
+    // 🧩 僅當「上傳完成」後，才啟用 Realtime
+    if (!email || !uploading) {
+        console.log("⚠️ 尚未輸入 email 或尚未上傳，不啟用 Realtime");
         return;
     }
 
     console.log("🔔 啟用 Realtime 訂閱 for:", email);
-    subscribedRef.current = true;
-
     const channel = supabase
         .channel(`job-status-${email}`)
         .on(
@@ -61,11 +56,12 @@ export default function UploadPage() {
         )
         .subscribe((status) => console.log("📡 訂閱狀態:", status));
 
+    // 🧹 cleanup
     return () => {
         console.log("❎ 卸載時移除 Realtime 訂閱");
         supabase.removeChannel(channel);
     };
-    }, [email]);
+    }, [email, uploading]);
 
   // 🧩 上傳影片
   const handleUpload = async () => {
