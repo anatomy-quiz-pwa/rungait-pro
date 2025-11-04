@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 
-
 export default function ResultPage() {
   const [email, setEmail] = useState("");
   const [job, setJob] = useState<any>(null);
@@ -25,7 +24,7 @@ export default function ResultPage() {
     setLoading(true);
     const { data, error } = await supabase
       .from("jobs")
-      .select("*")
+      .select("id, user_email, status, result_signed_url, result_video_path, error_msg")
       .eq("user_email", email)
       .order("created_at", { ascending: false })
       .limit(1)
@@ -66,25 +65,33 @@ export default function ResultPage() {
               </span>
             </p>
 
-            {job.status === "done" && job.result_video_path ? (
-              <div>
-                <video
-                controls
-                className="w-full rounded-lg border border-zinc-700 mb-4"
-                src={job.result_signed_url || ""}
-                >
-                您的瀏覽器不支援影片播放。
-                </video>
-                <a
-                href={job.result_signed_url || "#"}
-                download
-                className="px-5 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition"
-                >
-                ⬇️ 下載分析結果
-                </a>
-              </div>
+            {job.status === "done" ? (
+              job.result_signed_url ? (
+                <div>
+                  <video
+                    controls
+                    className="w-full rounded-lg border border-zinc-700 mb-4"
+                    src={job.result_signed_url}
+                  >
+                    您的瀏覽器不支援影片播放。
+                  </video>
+                  <a
+                    href={job.result_signed_url}
+                    download
+                    className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded font-medium inline-flex items-center"
+                  >
+                    ⬇ 下載分析結果
+                  </a>
+                </div>
+              ) : (
+                <p className="text-zinc-400">
+                  簽名連結尚未產生或已過期，請稍後再試。
+                </p>
+              )
             ) : job.status === "failed" ? (
-              <p className="text-red-400">❌ 分析失敗，請重新上傳影片。</p>
+              <p className="text-red-400">
+                ❌ 分析失敗：{job.error_msg || "請重新上傳影片。"}
+              </p>
             ) : (
               <p className="text-yellow-400">⏳ 分析中，請稍後再試。</p>
             )}
