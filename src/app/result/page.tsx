@@ -40,7 +40,7 @@ export default function ResultPage() {
     setLoading(false);
   }
 
-  // ✅ 檔案下載（安全：透過 Supabase Storage）
+  // ✅ 檔案下載（透過 Supabase Storage）
   const handleDownload = async (bucket: string, path: string, filename: string) => {
     try {
       const { data, error } = await supabase.storage.from(bucket).download(path);
@@ -58,7 +58,10 @@ export default function ResultPage() {
     }
   };
 
-  // ✅ UI 渲染
+  // ✅ 統一按鈕樣式
+  const baseBtn =
+    "w-full py-3 rounded-lg font-semibold text-white transition inline-flex items-center justify-center shadow-md text-lg";
+
   return (
     <main className="min-h-screen flex flex-col items-center justify-center bg-zinc-50 dark:bg-black p-6 text-center text-zinc-800 dark:text-zinc-200">
       <div className="bg-white/10 dark:bg-zinc-900 p-8 rounded-2xl shadow-lg w-full max-w-2xl border border-zinc-700">
@@ -88,95 +91,52 @@ export default function ResultPage() {
 
             {/* ✅ 分析完成時顯示結果 */}
             {job.status === "done" && job.result_json?.files ? (
-              <div className="space-y-6">
-                {/* 🎬 影片播放區 */}
-                {job.result_signed_url && (
-                  <div>
-                    <video
-                      controls
-                      preload="metadata"
-                      className="w-full rounded-lg border border-zinc-700 mb-4"
-                      // 移除 download=true 以啟用串流
-                      src={job.result_signed_url
-                        ?.replace(/([&?])download=true(&|$)/, "$1")
-                        ?.replace(/[?&]$/, "")}
-                    >
-                      您的瀏覽器不支援影片播放。
-                    </video>
+              <div className="space-y-4">
+                {/* 🎬 影片下載 */}
+                <button
+                  onClick={async () => {
+                    const files = job.result_json?.files || {};
+                    const entry = Object.entries(files).find(([n]) =>
+                      n.toLowerCase().endsWith(".mp4")
+                    );
+                    if (!entry) return window.open(job.result_signed_url, "_blank");
+                    const [fileName, meta] = entry as [string, { bucket: string; path: string }];
+                    await handleDownload(meta.bucket, meta.path, fileName);
+                  }}
+                  className={`${baseBtn} bg-green-600 hover:bg-green-700`}
+                >
+                  ⬇️ 下載 影片mp4檔
+                </button>
 
+                {/* 📊 下載 Excel */}
+                {Object.entries(job.result_json.files)
+                  .filter(([n]) => n.toLowerCase().endsWith(".xlsx"))
+                  .map(([fileName, fileInfo]: [string, any]) => (
                     <button
-                      onClick={async () => {
-                        // 使用 result_json 內的 bucket/path 安全下載
-                        const files = job.result_json?.files || {};
-                        const entry = Object.entries(files).find(([n]) =>
-                          n.toLowerCase().endsWith(".mp4")
-                        );
-                        if (!entry) return window.open(job.result_signed_url, "_blank");
-                        const [fileName, meta] = entry as [string, { bucket: string; path: string }];
-                        await handleDownload(meta.bucket, meta.path, fileName);
-                      }}
-                      className="px-5 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition inline-flex items-center justify-center"
+                      key={fileName}
+                      onClick={() =>
+                        handleDownload(fileInfo.bucket, fileInfo.path, fileName)
+                      }
+                      className={`${baseBtn} bg-amber-600 hover:bg-amber-700`}
                     >
-                      ⬇️ 下載 影片mp4檔
+                      📊 下載 分析結果xlsx檔
                     </button>
-                  </div>
-                )}
+                  ))}
 
-                {/* 📂 其他檔案 (png/xlsx) */}
-                <div className="flex flex-col gap-3 mt-6">
-                  {Object.entries(job.result_json.files).map(
-                    ([fileName, fileInfo]: [string, any]) => {
-                      const bucket = fileInfo.bucket;
-                      const path = fileInfo.path;
-                      const ext = fileName.split(".").pop()?.toLowerCase();
-
-                      if (ext === "png") {
-                        const { data } = supabase.storage.from(bucket).getPublicUrl(path);
-                        const imgUrl = data.publicUrl;
-                        return (
-                          <div key={fileName} className="space-y-2">
-                            <img
-                              src={imgUrl}
-                              alt={fileName}
-                              loading="lazy"
-                              className="w-full rounded-lg border border-zinc-700"
-                            />
-                            <button
-                              onClick={() => handleDownload(bucket, path, fileName)}
-                              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition inline-flex items-center justify-center"
-                            >
-                              🖼️ 下載 分析圖表png檔
-                            </button>
-                          </div>
-                        );
+                {/* 🖼️ 下載 PNG */}
+                {Object.entries(job.result_json.files)
+                  .filter(([n]) => n.toLowerCase().endsWith(".png"))
+                  .map(([fileName, fileInfo]: [string, any]) => (
+                    <button
+                      key={fileName}
+                      onClick={() =>
+                        handleDownload(fileInfo.bucket, fileInfo.path, fileName)
                       }
-
-                      if (ext === "xlsx") {
-                        return (
-                          <button
-                            key={fileName}
-                            onClick={() => handleDownload(bucket, path, fileName)}
-                            className="px-4 py-2 bg-amber-600 text-white rounded-md hover:bg-amber-700 transition inline-flex items-center justify-center"
-                          >
-                            📊 下載 分析結果xlsx檔
-                          </button>
-                        );
-                      }
-
-                      if (ext === "mp4") return null; // 主影片已顯示，略過
-
-                      return (
-                        <button
-                          key={fileName}
-                          onClick={() => handleDownload(bucket, path, fileName)}
-                          className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition inline-flex items-center justify-center"
-                        >
-                          📁 下載 {fileName}
-                        </button>
-                      );
-                    }
-                  )}
-                </div>
+                      className={`${baseBtn} bg-blue-600 hover:bg-blue-700`}
+                    >
+                      🖼️ 下載 分析圖表png檔
+                    </button>
+                  ))}
               </div>
             ) : job.status === "failed" ? (
               <p className="text-red-400">❌ 分析失敗，請重新上傳影片。</p>
