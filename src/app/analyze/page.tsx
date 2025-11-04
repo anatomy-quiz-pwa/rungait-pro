@@ -1,13 +1,13 @@
 'use client';
 
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { VideoPlayer } from '@/src/components/VideoPlayer';
 import { JointChart } from '@/src/components/JointChart';
 import { AiInsights } from '@/src/components/AiInsights';
-import { Upload, FileVideo, Loader2 } from 'lucide-react';
+import { Upload, FileVideo, Loader2, PlayCircle } from 'lucide-react';
 import type { AnalysisPacket, JointKey, GaitPhaseId } from '@/src/types/gait';
 
 export default function AnalyzePage() {
@@ -25,15 +25,19 @@ export default function AnalyzePage() {
       const response = await fetch('/api/mock?type=analysis');
       const data: AnalysisPacket = await response.json();
       setAnalysisData(data);
-      if (data.videoUrl) {
-        setVideoUrl(data.videoUrl);
-      }
+      // 使用一個示範影片 URL（可以是公開的影片或 placeholder）
+      setVideoUrl(data.videoUrl || 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4');
     } catch (error) {
       console.error('Failed to load analysis data:', error);
     } finally {
       setIsLoading(false);
     }
   }, []);
+
+  // 頁面載入時自動載入示範資料
+  useEffect(() => {
+    loadMockData();
+  }, [loadMockData]);
 
   // 處理檔案上傳
   const handleFileUpload = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
@@ -100,50 +104,70 @@ export default function AnalyzePage() {
             <CardHeader>
               <CardTitle>上傳影片</CardTitle>
               <CardDescription>
-                支援 MP4、MOV、AVI 等常見影片格式
+                支援 MP4、MOV、AVI 等常見影片格式，或查看示範分析
               </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="flex flex-col items-center justify-center border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-lg p-12 space-y-4">
-                <FileVideo className="w-16 h-16 text-slate-400" />
-                <div className="text-center">
-                  <p className="text-sm text-slate-600 dark:text-slate-400 mb-2">
-                    點擊上傳或拖放影片檔案
-                  </p>
-                  <label htmlFor="video-upload">
-                    <Button asChild className="cursor-pointer">
-                      <span>
-                        <Upload className="w-4 h-4 mr-2" />
-                        選擇影片
-                      </span>
-                    </Button>
-                  </label>
-                  <input
-                    id="video-upload"
-                    type="file"
-                    accept="video/*"
-                    onChange={handleFileUpload}
-                    className="hidden"
-                  />
-                </div>
-                {videoFile && (
-                  <div className="mt-4 text-sm text-slate-600 dark:text-slate-400">
-                    <p>已選擇：{videoFile.name}</p>
-                    <Button
-                      onClick={handleAnalyze}
-                      disabled={isLoading}
-                      className="mt-4"
-                    >
-                      {isLoading ? (
-                        <>
-                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                          分析中...
-                        </>
-                      ) : (
-                        '開始分析'
-                      )}
-                    </Button>
-                  </div>
+                {isLoading ? (
+                  <>
+                    <Loader2 className="w-16 h-16 text-slate-400 animate-spin" />
+                    <p className="text-sm text-slate-600 dark:text-slate-400">
+                      載入示範分析資料中...
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <FileVideo className="w-16 h-16 text-slate-400" />
+                    <div className="text-center space-y-4">
+                      <p className="text-sm text-slate-600 dark:text-slate-400 mb-2">
+                        點擊上傳或拖放影片檔案，或查看示範分析
+                      </p>
+                      <div className="flex flex-col sm:flex-row gap-3">
+                        <Button
+                          onClick={loadMockData}
+                          className="cursor-pointer"
+                        >
+                          <PlayCircle className="w-4 h-4 mr-2" />
+                          查看示範分析
+                        </Button>
+                        <label htmlFor="video-upload">
+                          <Button asChild variant="outline" className="cursor-pointer">
+                            <span>
+                              <Upload className="w-4 h-4 mr-2" />
+                              選擇影片
+                            </span>
+                          </Button>
+                        </label>
+                      </div>
+                      <input
+                        id="video-upload"
+                        type="file"
+                        accept="video/*"
+                        onChange={handleFileUpload}
+                        className="hidden"
+                      />
+                    </div>
+                    {videoFile && (
+                      <div className="mt-4 text-sm text-slate-600 dark:text-slate-400">
+                        <p>已選擇：{videoFile.name}</p>
+                        <Button
+                          onClick={handleAnalyze}
+                          disabled={isLoading}
+                          className="mt-4"
+                        >
+                          {isLoading ? (
+                            <>
+                              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                              分析中...
+                            </>
+                          ) : (
+                            '開始分析'
+                          )}
+                        </Button>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             </CardContent>
