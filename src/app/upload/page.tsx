@@ -5,7 +5,6 @@ import Link from "next/link";
 import { RealtimeChannel } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabaseClient";
 
-
 // ===== 可調參數 =====
 const MAX_SIZE = 50 * 1024 * 1024;
 const ALLOWED_EXT = [".mp4", ".mov", ".m4v", ".avi", ".webm"];
@@ -42,10 +41,9 @@ export default function UploadPage() {
     subscribedRef.current = false;
   };
 
-  // ===== 建立訂閱 =====
+  // ===== 建立 Realtime 訂閱 =====
   const subscribeOnce = (effectiveEmail: string) => {
     if (!effectiveEmail || subscribedRef.current) return;
-    console.log("🔔 建立 Realtime 訂閱 for:", effectiveEmail);
     subscribedRef.current = true;
     reconnectAttemptsRef.current = 0;
 
@@ -57,14 +55,11 @@ export default function UploadPage() {
           event: "*",
           schema: "public",
           table: "jobs",
-          // ✅ 改正 filter 語法（不加引號）
           filter: `user_email=eq.${effectiveEmail}`,
         },
         (payload) => {
-          console.log("🧩 收到 Realtime 更新:", payload);
           const data = payload.new as { status?: string; error_msg?: string };
           const status = data?.status;
-
           if (status === "processing") setMessage("🕐 分析中，請稍候...");
           else if (status === "done") {
             setMessage("✅ 分析完成！點擊下方按鈕查看結果");
@@ -76,7 +71,6 @@ export default function UploadPage() {
         }
       )
       .subscribe((status) => {
-        console.log("📡 訂閱狀態:", status);
         if (status === "SUBSCRIBED") setIsConnected(true);
         if (status === "CLOSED" || status === "TIMED_OUT") setIsConnected(false);
       });
@@ -84,7 +78,7 @@ export default function UploadPage() {
     channelRef.current = ch;
   };
 
-  // ===== Realtime 斷線自動重連 =====
+  // ===== Realtime 斷線重連監控 =====
   useEffect(() => {
     let cancelled = false;
     const monitor = async () => {
@@ -92,17 +86,13 @@ export default function UploadPage() {
         await sleep(10000);
         if (!debouncedEmailRef.current || isConnected || !subscribedRef.current) continue;
         if (!navigator.onLine) continue;
-
         if (reconnectAttemptsRef.current >= MAX_RECONNECT_ATTEMPTS) {
           setMessage("🔴 Realtime 已中斷且重連達上限，請重新整理或稍後再試");
           break;
         }
-
         reconnectAttemptsRef.current += 1;
         const delay = backoffDelay(reconnectAttemptsRef.current);
-        console.log(`🔄 嘗試重連 #${reconnectAttemptsRef.current}，等待 ${delay}ms`);
         setMessage(`⚡ 嘗試重新連線中（第 ${reconnectAttemptsRef.current} 次）…`);
-
         await sleep(delay);
         removeCurrentChannel();
         subscribeOnce(debouncedEmailRef.current);
@@ -127,36 +117,12 @@ export default function UploadPage() {
     };
   }, [email]);
 
-  // ===== 視窗可見性與網路恢復喚醒 =====
   useEffect(() => {
-    const onVis = () => {
-      if (document.visibilityState === "visible" && !isConnected && debouncedEmailRef.current) {
-        removeCurrentChannel();
-        subscribeOnce(debouncedEmailRef.current);
-      }
-    };
-    const onOnline = () => {
-      if (!isConnected && debouncedEmailRef.current) {
-        removeCurrentChannel();
-        subscribeOnce(debouncedEmailRef.current);
-      }
-    };
-    document.addEventListener("visibilitychange", onVis);
-    window.addEventListener("online", onOnline);
-    return () => {
-      document.removeEventListener("visibilitychange", onVis);
-      window.removeEventListener("online", onOnline);
-    };
-  }, [isConnected]);
-
-  useEffect(() => {
-    return () => {
-      removeCurrentChannel();
-    };
+    return () => removeCurrentChannel();
   }, []);
 
-  // ===== 上傳頻率限制 =====
-  const checkQuota = () => {
+  // ===== 本地頻率限制 (localStorage) =====
+  const checkLocalQuota = () => {
     try {
       const key = "upload_history_v1";
       const now = Date.now();
@@ -174,6 +140,26 @@ export default function UploadPage() {
     }
   };
 
+  // ===== 從 Supabase 檢查 Email 上傳次數 (真正根據帳號) =====
+  async function checkEmailQuota(email: string) {
+    const oneHourAgo = new Date(Date.now() - 3600 * 1000).toISOString();
+    const { data, error } = await supabase
+      .from("jobs")
+      .select("created_at")
+      .eq("user_email", email)
+      .gte("created_at", oneHourAgo);
+    if (error) {
+      console.error("查詢上傳次數錯誤:", error);
+      return { ok: true };
+    }
+    if (data && data.length >= UPLOADS_PER_HOUR_LIMIT) {
+      const oldest = new Date(data[0].created_at).getTime();
+      const remain = 60 - Math.floor((Date.now() - oldest) / 60000);
+      return { ok: false, remain };
+    }
+    return { ok: true };
+  }
+
   // ===== 備援：輪詢 job 狀態 =====
   async function pollJobStatus(email: string) {
     const MAX_POLLS = 24;
@@ -185,7 +171,6 @@ export default function UploadPage() {
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
-
       if (data?.status === "done") {
         setMessage("✅ 分析完成！點擊下方按鈕查看結果");
         setUploading(false);
@@ -206,11 +191,19 @@ export default function UploadPage() {
     if (!email) return setMessage("請輸入 Email");
     if (!file) return setMessage("請選擇影片");
     if (file.size > MAX_SIZE) return setMessage("影片超過 50MB");
+
     const ext = file.name.toLowerCase();
     if (!ALLOWED_EXT.some((x) => ext.endsWith(x))) return setMessage("檔案格式不支援");
 
-    const quota = checkQuota();
-    if (!quota.ok) return setMessage(`⛔ 上傳過於頻繁，請 ${quota.remain} 分鐘後再試`);
+    // ✅ Step 1: 先檢查帳號上傳次數（跨裝置有效）
+    const quotaByEmail = await checkEmailQuota(email);
+    if (!quotaByEmail.ok)
+      return setMessage(`⛔ ${email} 一小時內已上傳 3 次，請 ${quotaByEmail.remain} 分鐘後再試`);
+
+    // ✅ Step 2: 本地限制（防止誤觸連續上傳）
+    const quota = checkLocalQuota();
+    if (!quota.ok)
+      return setMessage(`⛔ 本機上傳過於頻繁，請 ${quota.remain} 分鐘後再試`);
 
     setUploading(true);
     setMessage("上傳中…");
@@ -230,7 +223,7 @@ export default function UploadPage() {
       if (insErr) throw insErr;
 
       setMessage("✅ 影片已上傳成功，正在分析中…");
-      pollJobStatus(email); // ← 備援啟動
+      pollJobStatus(email);
     } catch (err: any) {
       console.error(err);
       setMessage(`❌ 錯誤：${err.message}`);
@@ -239,41 +232,28 @@ export default function UploadPage() {
     }
   };
 
+  // ===== UI =====
   return (
     <main className="min-h-screen flex flex-col items-center justify-center bg-zinc-50 dark:bg-black p-6 relative">
       <div className="bg-white/10 dark:bg-zinc-900 p-8 rounded-2xl shadow-lg w-full max-w-md space-y-5 border border-zinc-700">
-        <h1 className="text-3xl font-bold text-center text-zinc-900 dark:text-zinc-100">
-          上傳影片進行分析
-        </h1>
-        <p className="text-center text-zinc-600 dark:text-zinc-400 text-sm">
-          請上傳你的跑步影片（限制 50MB），系統會自動進行姿勢分析。
-        </p>
-
+        <h1 className="text-3xl font-bold text-center">上傳影片進行分析</h1>
         <input
           type="email"
           placeholder="輸入 Email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          className="w-full border border-zinc-300 dark:border-zinc-700 bg-white/60 dark:bg-zinc-800 p-2 rounded-md text-black dark:text-white"
-        />
-        <input
-          type="number"
-          placeholder="幀數（例如 300）"
-          value={frameCount}
-          onChange={(e) => setFrameCount(Number(e.target.value))}
-          className="w-full border border-zinc-300 dark:border-zinc-700 bg-white/60 dark:bg-zinc-800 p-2 rounded-md text-black dark:text-white"
+          className="w-full border p-2 rounded-md bg-white/60 dark:bg-zinc-800"
         />
         <input
           type="file"
           accept="video/*"
           onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-          className="w-full border border-zinc-300 dark:border-zinc-700 bg-white/60 dark:bg-zinc-800 p-2 rounded-md text-black dark:text-white"
+          className="w-full border p-2 rounded-md bg-white/60 dark:bg-zinc-800"
         />
-
         <button
           disabled={uploading}
           onClick={handleUpload}
-          className={`w-full p-3 rounded-md font-semibold text-white transition ${
+          className={`w-full p-3 rounded-md font-semibold text-white ${
             uploading ? "bg-zinc-600 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-700"
           }`}
         >
@@ -281,7 +261,7 @@ export default function UploadPage() {
         </button>
 
         {message && (
-          <div className="text-center text-sm text-zinc-800 dark:text-zinc-300 mt-3 space-y-2">
+          <div className="text-center text-sm mt-3">
             <p>{message}</p>
             {message.includes("分析完成") && (
               <Link
@@ -293,23 +273,6 @@ export default function UploadPage() {
             )}
           </div>
         )}
-
-        <div
-          className={`text-xs text-center mt-2 ${
-            isConnected ? "text-green-500" : "text-red-400"
-          }`}
-        >
-          {isConnected ? "🟢 Realtime 連線中" : "🔴 Realtime 已中斷，等待/嘗試重連…"}
-        </div>
-      </div>
-
-      <div className="absolute bottom-6">
-        <Link
-          href="/"
-          className="text-sm text-zinc-500 dark:text-zinc-400 hover:text-blue-400"
-        >
-          ← 回首頁
-        </Link>
       </div>
     </main>
   );
