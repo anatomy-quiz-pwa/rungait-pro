@@ -71,7 +71,7 @@ export default function ResultPage() {
                   <video
                     controls
                     className="w-full rounded-lg border border-zinc-700 mb-4"
-                    src={job.result_signed_url}
+                    src={`${job.result_signed_url}${job.result_signed_url.includes("?") ? "&" : "?"}download=true`}
                   >
                     您的瀏覽器不支援影片播放。
                   </video>
