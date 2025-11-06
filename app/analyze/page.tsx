@@ -23,16 +23,24 @@ export default function AnalyzePage() {
     setIsLoading(true);
     try {
       const response = await fetch('/api/mock?type=analysis');
+      if (!response.ok) {
+        throw new Error(`API 錯誤: ${response.status}`);
+      }
       const data: AnalysisPacket = await response.json();
       setAnalysisData(data);
-      // 使用一個示範影片 URL（可以是公開的影片或 placeholder）
-      setVideoUrl(data.videoUrl || 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4');
+      // 如果用戶上傳了影片，使用上傳的影片；否則使用示範影片
+      if (!videoUrl || videoUrl.startsWith('blob:')) {
+        // 保持用戶上傳的影片 URL
+      } else {
+        setVideoUrl(data.videoUrl || 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4');
+      }
     } catch (error) {
       console.error('Failed to load analysis data:', error);
+      alert('載入分析資料失敗，請稍後再試');
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [videoUrl]);
 
   // 移除自動載入，改為手動觸發
 
@@ -43,12 +51,11 @@ export default function AnalyzePage() {
       setVideoFile(file);
       const url = URL.createObjectURL(file);
       setVideoUrl(url);
-      // 上傳後自動載入分析資料（模擬）
-      loadMockData();
+      // 上傳後不自動分析，等待用戶點擊「開始分析」按鈕
     } else {
       alert('請上傳影片檔案');
     }
-  }, [loadMockData]);
+  }, []);
 
   // 處理開始分析（示範或實際上傳）
   const handleAnalyze = useCallback(() => {
@@ -154,24 +161,36 @@ export default function AnalyzePage() {
                       />
                       
                       {videoFile && (
-                        <div className="mt-4 p-4 bg-slate-100 dark:bg-slate-800 rounded-lg">
-                          <p className="text-sm text-slate-700 dark:text-slate-300 mb-2">
-                            已選擇檔案：<span className="font-medium">{videoFile.name}</span>
-                          </p>
-                          <Button
-                            onClick={handleAnalyze}
-                            disabled={isLoading}
-                            className="w-full"
-                          >
-                            {isLoading ? (
-                              <>
-                                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                                分析中...
-                              </>
-                            ) : (
-                              '開始分析'
-                            )}
-                          </Button>
+                        <div className="mt-4 p-4 bg-slate-100 dark:bg-slate-800 rounded-lg w-full max-w-md">
+                          <div className="space-y-3">
+                            <div className="flex items-center gap-2">
+                              <FileVideo className="w-4 h-4 text-slate-600" />
+                              <p className="text-sm text-slate-700 dark:text-slate-300">
+                                已選擇檔案：<span className="font-medium">{videoFile.name}</span>
+                              </p>
+                            </div>
+                            <p className="text-xs text-slate-500 dark:text-slate-400">
+                              檔案大小：{(videoFile.size / 1024 / 1024).toFixed(2)} MB
+                            </p>
+                            <Button
+                              onClick={handleAnalyze}
+                              disabled={isLoading}
+                              className="w-full"
+                              size="lg"
+                            >
+                              {isLoading ? (
+                                <>
+                                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                  分析中，請稍候...
+                                </>
+                              ) : (
+                                <>
+                                  <PlayCircle className="w-4 h-4 mr-2" />
+                                  開始分析
+                                </>
+                              )}
+                            </Button>
+                          </div>
                         </div>
                       )}
                     </div>
