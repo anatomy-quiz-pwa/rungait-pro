@@ -37,15 +37,20 @@ export default function AnalyzePage() {
 
   // 載入 mock 資料（示範用）
   const loadMockData = useCallback(async () => {
+    console.log('loadMockData called');
     setIsLoading(true);
     try {
       const data = mockAnalysisData;
+      console.log('Setting analysis data:', { id: data.id, hasPhases: !!data.phases, hasSeries: !!data.series });
       setAnalysisData(data);
-      setVideoUrl(data.videoUrl || 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4');
+      const videoUrl = data.videoUrl || 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4';
+      console.log('Setting video URL:', videoUrl);
+      setVideoUrl(videoUrl);
     } catch (error) {
       console.error('Failed to load analysis data:', error);
     } finally {
       setIsLoading(false);
+      console.log('loadMockData completed');
     }
   }, []);
 
@@ -121,9 +126,12 @@ export default function AnalyzePage() {
   // 初始化：自動載入示範資料
   useEffect(() => {
     // 只在首次載入時執行
+    console.log('AnalyzePage mounted, checking initial state...', { analysisData: !!analysisData, isLoading, videoUrl: !!videoUrl });
     if (!analysisData && !isLoading && !videoUrl) {
       console.log('Auto-loading mock data...');
       loadMockData();
+    } else {
+      console.log('Skipping auto-load:', { hasData: !!analysisData, isLoading, hasVideo: !!videoUrl });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // 只在 mount 時執行一次
