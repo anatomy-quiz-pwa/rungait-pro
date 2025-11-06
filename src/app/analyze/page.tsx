@@ -24,8 +24,6 @@ export default function AnalyzePage() {
 
   // 載入 mock 資料（示範用）
   const loadMockData = useCallback(async () => {
-    if (analysisData) return;
-    
     setIsLoading(true);
     try {
       const data = mockAnalysisData;
@@ -36,7 +34,7 @@ export default function AnalyzePage() {
     } finally {
       setIsLoading(false);
     }
-  }, [analysisData]);
+  }, []);
 
   // 實際上傳並分析影片
   const analyzeVideo = useCallback(async (file: File) => {
@@ -82,7 +80,14 @@ export default function AnalyzePage() {
   // 處理檔案上傳
   const handleFileUpload = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (file && file.type.startsWith('video/')) {
+    console.log('File selected:', file);
+    if (!file) {
+      console.log('No file selected');
+      return;
+    }
+    
+    if (file.type.startsWith('video/')) {
+      console.log('Video file detected, starting upload...');
       setVideoFile(file);
       const url = URL.createObjectURL(file);
       setVideoUrl(url);
@@ -90,6 +95,8 @@ export default function AnalyzePage() {
       analyzeVideo(file);
     } else {
       alert('請上傳影片檔案');
+      // 重置 input
+      event.target.value = '';
     }
   }, [analyzeVideo]);
 
@@ -100,10 +107,10 @@ export default function AnalyzePage() {
 
   // 初始化：自動載入示範資料
   useEffect(() => {
-    if (!analysisData && !isLoading) {
+    if (!analysisData && !isLoading && !videoUrl) {
       loadMockData();
     }
-  }, []);
+  }, [analysisData, isLoading, videoUrl, loadMockData]);
 
   // 獲取當前相位
   const currentPhase = useMemo(() => {
@@ -174,10 +181,15 @@ export default function AnalyzePage() {
                 size="sm"
                 className="border-slate-600 text-slate-300 hover:bg-slate-700 hover:text-white cursor-pointer"
                 disabled={isLoading}
-                onClick={() => {
-                  const input = document.getElementById('video-upload');
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  const input = document.getElementById('video-upload') as HTMLInputElement;
                   if (input) {
                     input.click();
+                  } else {
+                    console.error('Video upload input not found');
                   }
                 }}
               >
