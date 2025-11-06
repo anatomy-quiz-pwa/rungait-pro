@@ -19,24 +19,24 @@ export function QuickActions({ onCompare, onGenerateReport, onExportData }: Quic
       <CardContent className="space-y-2">
         <Button
           variant="ghost"
-          className="w-full justify-start text-slate-300 hover:text-white hover:bg-slate-700"
-          onClick={onCompare}
+          className="w-full justify-start text-slate-300 hover:text-white hover:bg-slate-700 cursor-pointer"
+          onClick={onCompare || (() => console.log('Compare clicked'))}
         >
           <GitCompare className="w-4 h-4 mr-2" />
           Compare with Previous
         </Button>
         <Button
           variant="ghost"
-          className="w-full justify-start text-slate-300 hover:text-white hover:bg-slate-700"
-          onClick={onGenerateReport}
+          className="w-full justify-start text-slate-300 hover:text-white hover:bg-slate-700 cursor-pointer"
+          onClick={onGenerateReport || (() => console.log('Generate Report clicked'))}
         >
           <FileText className="w-4 h-4 mr-2" />
           Generate Full Report
         </Button>
         <Button
           variant="ghost"
-          className="w-full justify-start text-slate-300 hover:text-white hover:bg-slate-700"
-          onClick={onExportData}
+          className="w-full justify-start text-slate-300 hover:text-white hover:bg-slate-700 cursor-pointer"
+          onClick={onExportData || (() => console.log('Export Data clicked'))}
         >
           <Download className="w-4 h-4 mr-2" />
           Export Raw Data

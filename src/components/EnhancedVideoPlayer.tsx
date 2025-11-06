@@ -150,7 +150,8 @@ export function EnhancedVideoPlayer({
             variant="ghost"
             size="icon"
             onClick={skipBackward}
-            className="text-slate-300 hover:text-white"
+            className="text-slate-300 hover:text-white cursor-pointer"
+            type="button"
           >
             <SkipBack className="w-5 h-5" />
           </Button>
@@ -158,7 +159,8 @@ export function EnhancedVideoPlayer({
             variant="ghost"
             size="icon"
             onClick={togglePlay}
-            className="text-cyan-400 hover:text-cyan-300"
+            className="text-cyan-400 hover:text-cyan-300 cursor-pointer"
+            type="button"
           >
             <Play className={`w-5 h-5 ${isPlaying ? 'hidden' : ''}`} />
             <div className={`w-5 h-5 ${isPlaying ? '' : 'hidden'}`}>
@@ -172,7 +174,8 @@ export function EnhancedVideoPlayer({
             variant="ghost"
             size="icon"
             onClick={skipForward}
-            className="text-slate-300 hover:text-white"
+            className="text-slate-300 hover:text-white cursor-pointer"
+            type="button"
           >
             <SkipForward className="w-5 h-5" />
           </Button>
@@ -195,9 +198,10 @@ export function EnhancedVideoPlayer({
               onClick={() => setPlaybackRate(rate)}
               className={
                 playbackRate === rate
-                  ? 'bg-cyan-500 hover:bg-cyan-600 text-white'
-                  : 'text-slate-300 hover:text-white'
+                  ? 'bg-cyan-500 hover:bg-cyan-600 text-white cursor-pointer'
+                  : 'text-slate-300 hover:text-white cursor-pointer'
               }
+              type="button"
             >
               {rate}x
             </Button>
@@ -206,7 +210,8 @@ export function EnhancedVideoPlayer({
             variant="ghost"
             size="icon"
             onClick={handleCapture}
-            className="text-slate-300 hover:text-white"
+            className="text-slate-300 hover:text-white cursor-pointer"
+            type="button"
           >
             <Camera className="w-5 h-5" />
           </Button>

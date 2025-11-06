@@ -162,17 +162,6 @@ export default function AnalyzePage() {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <label htmlFor="video-upload">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="border-slate-600 text-slate-300 hover:bg-slate-700 hover:text-white"
-                  disabled={isLoading}
-                >
-                  <Upload className="h-4 w-4 mr-2" />
-                  Upload Video
-                </Button>
-              </label>
               <input
                 id="video-upload"
                 type="file"
@@ -181,11 +170,26 @@ export default function AnalyzePage() {
                 className="hidden"
               />
               <Button
+                variant="outline"
+                size="sm"
+                className="border-slate-600 text-slate-300 hover:bg-slate-700 hover:text-white cursor-pointer"
+                disabled={isLoading}
+                onClick={() => {
+                  const input = document.getElementById('video-upload');
+                  if (input) {
+                    input.click();
+                  }
+                }}
+              >
+                <Upload className="h-4 w-4 mr-2" />
+                Upload Video
+              </Button>
+              <Button
                 variant="default"
                 size="sm"
                 onClick={handleExportReport}
                 disabled={!analysisData}
-                className="bg-cyan-500 hover:bg-cyan-600 text-white"
+                className="bg-cyan-500 hover:bg-cyan-600 text-white cursor-pointer"
               >
                 <Download className="h-4 w-4 mr-2" />
                 Export Report
@@ -209,7 +213,11 @@ export default function AnalyzePage() {
             <Card className="bg-slate-800/50 border-slate-700 p-8 max-w-md">
               <div className="text-center space-y-4">
                 <p className="text-slate-300">No video loaded</p>
-                <Button onClick={handleAnalyze} className="bg-cyan-500 hover:bg-cyan-600">
+                <Button 
+                  onClick={handleAnalyze} 
+                  className="bg-cyan-500 hover:bg-cyan-600 text-white cursor-pointer"
+                  type="button"
+                >
                   Load Demo Analysis
                 </Button>
               </div>
