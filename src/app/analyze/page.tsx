@@ -7,13 +7,23 @@ export const revalidate = 0;
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Badge } from '@/components/ui/badge';
 import { Upload, Download, Home, Loader2 } from 'lucide-react';
 import { EnhancedVideoPlayer } from '@/src/components/EnhancedVideoPlayer';
 import { AnalysisSummary } from '@/src/components/AnalysisSummary';
 import { QuickActions } from '@/src/components/QuickActions';
-import type { AnalysisPacket } from '@/src/types/gait';
-import { mockAnalysisData } from '@/src/lib/mock';
+import { PhaseBar, type GaitPhase } from '@/components/phase-bar';
+import { JointChart } from '@/src/components/JointChart';
+import { AiInsights } from '@/src/components/AiInsights';
+import { ProvenancePanel } from '@/src/components/ProvenancePanel';
+import { CitationCard } from '@/src/components/CitationCard';
+import type { AnalysisPacket, JointKey } from '@/src/types/gait';
+import { mockAnalysisData, mockDatasets, mockPipeline, mockCitations } from '@/src/lib/mock';
+
+type DataTab = 'kinematics' | 'findings' | 'evidence';
+type JointTab = 'ankle' | 'knee' | 'hip' | 'pelvis-tilt' | 'trunk-lean';
 
 export default function AnalyzePage() {
   const [analysisData, setAnalysisData] = useState<AnalysisPacket | null>(null);
@@ -21,6 +31,9 @@ export default function AnalyzePage() {
   const [currentTime, setCurrentTime] = useState(0);
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [videoUrl, setVideoUrl] = useState<string>('');
+  const [selectedPhase, setSelectedPhase] = useState<GaitPhase>('IC');
+  const [dataTab, setDataTab] = useState<DataTab>('kinematics');
+  const [jointTab, setJointTab] = useState<JointTab>('ankle');
 
   // 載入 mock 資料（示範用）
   const loadMockData = useCallback(async () => {
@@ -119,15 +132,72 @@ export default function AnalyzePage() {
     const sortedPhases = [...analysisData.phases].sort((a, b) => a.time - b.time);
     for (let i = sortedPhases.length - 1; i >= 0; i--) {
       if (currentTime >= sortedPhases[i].time) {
-        return sortedPhases[i].phase;
+        const phaseMap: Record<string, GaitPhase> = {
+          'initial-contact': 'IC',
+          'loading-response': 'LR',
+          'mid-stance': 'MS',
+          'terminal-stance': 'TS',
+          'pre-swing': 'PSw',
+          'initial-swing': 'ISw',
+          'mid-swing': 'MidSw',
+          'terminal-swing': 'TSw',
+        };
+        return phaseMap[sortedPhases[i].phase] || 'IC';
       }
     }
-    return sortedPhases[0]?.phase;
+    return 'IC';
   }, [analysisData, currentTime]);
+
+  // 處理相位點擊
+  const handlePhaseClick = useCallback((phase: GaitPhase) => {
+    setSelectedPhase(phase);
+    if (analysisData) {
+      const phaseMap: Record<GaitPhase, string> = {
+        'IC': 'initial-contact',
+        'LR': 'loading-response',
+        'MS': 'mid-stance',
+        'TS': 'terminal-stance',
+        'PSw': 'pre-swing',
+        'ISw': 'initial-swing',
+        'MidSw': 'mid-swing',
+        'TSw': 'terminal-swing',
+      };
+      const phaseData = analysisData.phases.find(p => p.phase === phaseMap[phase]);
+      if (phaseData) {
+        setCurrentTime(phaseData.time);
+      }
+    }
+  }, [analysisData]);
+
+  // 準備相位標記
+  const phaseMarkers = useMemo(() => {
+    if (!analysisData) return [];
+    return analysisData.phases.map((phase) => ({
+      time: phase.time,
+      label: phase.phase,
+    }));
+  }, [analysisData]);
+
+  // 獲取當前相位的正常範圍
+  const currentNormBand = useMemo(() => {
+    if (!analysisData || !selectedPhase) return undefined;
+    const phaseMap: Record<GaitPhase, string> = {
+      'IC': 'initial-contact',
+      'LR': 'loading-response',
+      'MS': 'mid-stance',
+      'TS': 'terminal-stance',
+      'PSw': 'pre-swing',
+      'ISw': 'initial-swing',
+      'MidSw': 'mid-swing',
+      'TSw': 'terminal-swing',
+    };
+    const phaseId = phaseMap[selectedPhase];
+    const jointKey = jointTab === 'pelvis-tilt' ? 'hip' : jointTab === 'trunk-lean' ? 'hip' : jointTab as JointKey;
+    return analysisData.norms[phaseId]?.[jointKey];
+  }, [analysisData, selectedPhase, jointTab]);
 
   // 處理快速操作
   const handleCompare = useCallback(() => {
-    // TODO: 導航到比較頁面
     console.log('Compare with previous');
   }, []);
 
@@ -150,6 +220,19 @@ export default function AnalyzePage() {
   const handleExportReport = useCallback(() => {
     handleGenerateReport();
   }, [handleGenerateReport]);
+
+  // 獲取關節當前角度和狀態
+  const getJointStatus = useCallback((joint: JointTab, angle: number) => {
+    if (!currentNormBand) return { status: 'OK', label: 'OK' };
+    if (angle < currentNormBand.min || angle > currentNormBand.max) {
+      return { status: 'Risk', label: 'Risk' };
+    }
+    const diff = Math.abs(angle - currentNormBand.mean);
+    if (diff > currentNormBand.std * 1.5) {
+      return { status: 'Warning', label: 'Warning' };
+    }
+    return { status: 'OK', label: 'OK' };
+  }, [currentNormBand]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
@@ -247,8 +330,9 @@ export default function AnalyzePage() {
           </div>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Left Panel: Video Analysis */}
-            <div className="lg:col-span-2">
+            {/* Left Panel: Video Analysis & Data */}
+            <div className="lg:col-span-2 space-y-6">
+              {/* Video Analysis */}
               <Card className="bg-slate-800/50 border-slate-700 p-6">
                 <EnhancedVideoPlayer
                   src={videoUrl}
@@ -257,13 +341,120 @@ export default function AnalyzePage() {
                   sessionId={analysisData?.metadata?.recordedAt ? new Date(analysisData.metadata.recordedAt).toISOString().split('T')[0] : undefined}
                 />
               </Card>
+
+              {/* Gait Phase Selection */}
+              {analysisData && (
+                <Card className="bg-slate-800/50 border-slate-700 p-6">
+                  <CardHeader>
+                    <CardTitle className="text-white">Gait Phase Selection</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <PhaseBar
+                      currentPhase={selectedPhase || currentPhase}
+                      onPhaseClick={handlePhaseClick}
+                    />
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Data Display Section */}
+              {analysisData && (
+                <Card className="bg-slate-800/50 border-slate-700 p-6">
+                  <Tabs value={dataTab} onValueChange={(v) => setDataTab(v as DataTab)}>
+                    <TabsList className="grid w-full grid-cols-3">
+                      <TabsTrigger value="kinematics">Joint Kinematics</TabsTrigger>
+                      <TabsTrigger value="findings">Findings</TabsTrigger>
+                      <TabsTrigger value="evidence">Evidence Base</TabsTrigger>
+                    </TabsList>
+
+                    {/* Joint Kinematics Tab */}
+                    <TabsContent value="kinematics" className="space-y-6 mt-6">
+                      {/* Joint Navigation */}
+                      <div className="flex gap-2 flex-wrap">
+                        {(['ankle', 'knee', 'hip', 'pelvis-tilt', 'trunk-lean'] as JointTab[]).map((joint) => (
+                          <Button
+                            key={joint}
+                            variant={jointTab === joint ? 'default' : 'outline'}
+                            size="sm"
+                            onClick={() => setJointTab(joint)}
+                            className={jointTab === joint ? 'bg-cyan-500 hover:bg-cyan-600' : ''}
+                          >
+                            {joint.charAt(0).toUpperCase() + joint.slice(1).replace('-', ' ')}
+                          </Button>
+                        ))}
+                      </div>
+
+                      {/* Joint Charts */}
+                      {(['ankle', 'knee', 'hip'] as JointTab[]).includes(jointTab) && (
+                        <div className="space-y-4">
+                          {analysisData.series[jointTab as JointKey] && (
+                            <div className="space-y-4">
+                              <Card className="bg-slate-700/50 border-slate-600">
+                                <CardHeader>
+                                  <div className="flex items-center justify-between">
+                                    <CardTitle className="text-white capitalize">{jointTab}</CardTitle>
+                                    {(() => {
+                                      const currentAngle = analysisData.series[jointTab as JointKey]?.[Math.floor(currentTime * 10)]?.angle || 0;
+                                      const status = getJointStatus(jointTab, currentAngle);
+                                      return (
+                                        <Badge
+                                          variant={status.status === 'OK' ? 'secondary' : status.status === 'Warning' ? 'default' : 'destructive'}
+                                          className={
+                                            status.status === 'OK'
+                                              ? 'bg-green-500/20 text-green-400 border-green-500/50'
+                                              : status.status === 'Warning'
+                                                ? 'bg-orange-500/20 text-orange-400 border-orange-500/50'
+                                                : 'bg-red-500/20 text-red-400 border-red-500/50'
+                                          }
+                                        >
+                                          {status.label}
+                                        </Badge>
+                                      );
+                                    })()}
+                                  </div>
+                                  <p className="text-sm text-slate-400">
+                                    {analysisData.series[jointTab as JointKey]?.[Math.floor(currentTime * 10)]?.angle.toFixed(1) || '0.0'}°
+                                  </p>
+                                </CardHeader>
+                                <CardContent>
+                                  <JointChart
+                                    data={analysisData.series[jointTab as JointKey]}
+                                    normBand={currentNormBand}
+                                    jointName={jointTab}
+                                    phaseMarkers={phaseMarkers}
+                                  />
+                                </CardContent>
+                              </Card>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </TabsContent>
+
+                    {/* Findings Tab */}
+                    <TabsContent value="findings" className="mt-6">
+                      <AiInsights insights={analysisData.aiInsights} />
+                    </TabsContent>
+
+                    {/* Evidence Base Tab */}
+                    <TabsContent value="evidence" className="mt-6 space-y-6">
+                      <ProvenancePanel datasets={mockDatasets} pipeline={mockPipeline} />
+                      <div className="space-y-3">
+                        {mockCitations.map((citation, idx) => (
+                          <CitationCard key={idx} {...citation} />
+                        ))}
+                      </div>
+                    </TabsContent>
+                  </Tabs>
+                </Card>
+              )}
             </div>
 
             {/* Right Panel: Analysis Summary & Quick Actions */}
             <div className="space-y-6">
               <AnalysisSummary
                 analysisData={analysisData}
-                currentPhase={currentPhase}
+                currentPhase={selectedPhase || currentPhase}
               />
               <QuickActions
                 onCompare={handleCompare}
