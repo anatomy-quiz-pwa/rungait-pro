@@ -118,7 +118,11 @@ function createMockAnalysis(id: string, videoUrl: string, isBefore: boolean = fa
       recordedAt: new Date().toISOString(),
       subjectId: 'demo-subject-001',
       notes: isBefore ? '治療前評估' : '治療後評估'
-    }
+    },
+    // Gait metrics
+    speed: isBefore ? 3.2 : 3.5, // m/s
+    cadence: isBefore ? 170 : 175, // steps/min
+    stepLength: isBefore ? 1.13 : 1.2, // m
   };
 }
 

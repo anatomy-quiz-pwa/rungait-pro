@@ -61,6 +61,10 @@ export interface AnalysisPacket {
     subjectId?: string;
     notes?: string;
   };
+  // Gait metrics
+  speed?: number; // m/s
+  cadence?: number; // steps/min
+  stepLength?: number; // m
 }
 
 export interface ComparisonPacket {

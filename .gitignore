@@ -39,3 +39,35 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Python service (separate from main project)
+# Note: python-service/ is kept locally but not committed to avoid mixing analysis code with UI
+python-service/
+services/python/
+*.pyc
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+
+# Uploads directory
+uploads/
+results/
+*.mp4
+*.mov
+*.avi
+*.xlsx
+*.csv
+*.png
+*.jpg
+*.jpeg
+
+# Model weights (too large for git)
+*.pt
+*.pth
+*.weights
+runs/
