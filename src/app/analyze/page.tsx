@@ -120,10 +120,13 @@ export default function AnalyzePage() {
 
   // 初始化：自動載入示範資料
   useEffect(() => {
+    // 只在首次載入時執行
     if (!analysisData && !isLoading && !videoUrl) {
+      console.log('Auto-loading mock data...');
       loadMockData();
     }
-  }, [analysisData, isLoading, videoUrl, loadMockData]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // 只在 mount 時執行一次
 
   // 獲取當前相位
   const currentPhase = useMemo(() => {
@@ -313,13 +316,18 @@ export default function AnalyzePage() {
               <p className="text-slate-400">Analyzing video...</p>
             </div>
           </div>
-        ) : !videoUrl ? (
+        ) : !videoUrl || !analysisData ? (
           <div className="flex items-center justify-center min-h-[60vh]">
             <Card className="bg-slate-800/50 border-slate-700 p-8 max-w-md">
               <div className="text-center space-y-4">
                 <p className="text-slate-300">No video loaded</p>
                 <Button 
-                  onClick={handleAnalyze} 
+                  onClick={(e) => {
+                    console.log('Load Demo button clicked');
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleAnalyze();
+                  }} 
                   className="bg-cyan-500 hover:bg-cyan-600 text-white cursor-pointer"
                   type="button"
                 >
