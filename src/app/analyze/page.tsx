@@ -168,26 +168,30 @@ export default function AnalyzePage() {
                 <p className="text-sm text-slate-400">Evidence-based running biomechanics</p>
               </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 relative z-50">
               <input
                 id="video-upload"
                 type="file"
                 accept="video/*"
                 onChange={handleFileUpload}
                 className="hidden"
+                style={{ position: 'absolute', visibility: 'hidden' }}
               />
               <Button
                 variant="outline"
                 size="sm"
-                className="border-slate-600 text-slate-300 hover:bg-slate-700 hover:text-white cursor-pointer"
+                className="border-slate-600 text-slate-300 hover:bg-slate-700 hover:text-white cursor-pointer relative z-50"
                 disabled={isLoading}
                 type="button"
                 onClick={(e) => {
+                  console.log('Upload button clicked');
                   e.preventDefault();
                   e.stopPropagation();
                   const input = document.getElementById('video-upload') as HTMLInputElement;
+                  console.log('Input element:', input);
                   if (input) {
                     input.click();
+                    console.log('Input click triggered');
                   } else {
                     console.error('Video upload input not found');
                   }
@@ -199,9 +203,15 @@ export default function AnalyzePage() {
               <Button
                 variant="default"
                 size="sm"
-                onClick={handleExportReport}
+                onClick={(e) => {
+                  console.log('Export Report button clicked');
+                  e.preventDefault();
+                  e.stopPropagation();
+                  handleExportReport();
+                }}
                 disabled={!analysisData}
-                className="bg-cyan-500 hover:bg-cyan-600 text-white cursor-pointer"
+                className="bg-cyan-500 hover:bg-cyan-600 text-white cursor-pointer relative z-50"
+                type="button"
               >
                 <Download className="h-4 w-4 mr-2" />
                 Export Report
