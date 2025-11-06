@@ -4,7 +4,7 @@
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -28,6 +28,8 @@ export default function AnalyzePage() {
 
   // 載入 mock 資料（示範用）
   const loadMockData = useCallback(async () => {
+    if (analysisData) return; // 如果已有資料，不重複載入
+    
     setIsLoading(true);
     try {
       // 直接從 mock.ts 讀取資料
@@ -39,7 +41,7 @@ export default function AnalyzePage() {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [analysisData]);
 
   // 實際上傳並分析影片
   const analyzeVideo = useCallback(async (file: File) => {
@@ -61,7 +63,10 @@ export default function AnalyzePage() {
         // 如果 API 返回 useMock 標記，使用 mock 資料
         if (errorData.useMock || response.status === 503) {
           console.warn('分析服務不可用，使用示範資料');
-          await loadMockData();
+          const data = mockAnalysisData;
+          setAnalysisData(data);
+          const url = URL.createObjectURL(file);
+          setVideoUrl(url);
           return;
         }
         
@@ -69,7 +74,7 @@ export default function AnalyzePage() {
       }
 
       const data: AnalysisPacket = await response.json();
-      setAnalysisData(data);
+      setAnalysisData(data); // 確保使用 API 返回的資料
       
       // 使用上傳的影片 URL
       const url = URL.createObjectURL(file);
@@ -78,11 +83,14 @@ export default function AnalyzePage() {
       console.error('分析錯誤:', error);
       // 發生錯誤時，回退到 mock 資料
       alert('分析服務暫時不可用，將顯示示範資料');
-      await loadMockData();
+      const data = mockAnalysisData;
+      setAnalysisData(data);
+      const url = URL.createObjectURL(file);
+      setVideoUrl(url);
     } finally {
       setIsLoading(false);
     }
-  }, [loadMockData]);
+  }, []);
 
   // 處理檔案上傳
   const handleFileUpload = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
@@ -121,6 +129,15 @@ export default function AnalyzePage() {
     
     return analysisData.norms[currentPhase.phase]?.[selectedJoint];
   }, [analysisData, currentTime, selectedJoint]);
+
+  // 確保在沒有資料時自動載入（僅在初始化時）
+  useEffect(() => {
+    // 不在這裡自動載入，讓用戶手動觸發
+    // 如果需要自動載入，取消下面的註解：
+    // if (!analysisData && !isLoading) {
+    //   loadMockData();
+    // }
+  }, []); // 只在 mount 時執行一次
 
   // 準備相位標記
   const phaseMarkers = useMemo(() => {

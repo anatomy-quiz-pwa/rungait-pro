@@ -1,3 +1,7 @@
+// 強制動態渲染，避免快取
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { FileVideo, BarChart3 } from "lucide-react";

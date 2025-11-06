@@ -1,5 +1,9 @@
 "use client"
 
+// 強制動態渲染，避免快取
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 import { useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -141,8 +145,6 @@ const mockCitations = [
     extractedRange: "0-40°",
   },
 ]
-
-export const dynamic = 'force-dynamic';
 
 export default function ReportPage() {
   const [isPrintView, setIsPrintView] = useState(false)
