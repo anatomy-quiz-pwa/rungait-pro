@@ -1,5 +1,9 @@
 'use client';
 
+// 強制動態渲染，避免快取
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 import { useState, useMemo, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
