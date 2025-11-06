@@ -4,40 +4,72 @@ export const revalidate = 0;
 
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { FileVideo, BarChart3 } from "lucide-react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { TrendingUp, GitCompare } from "lucide-react";
 
 export default function Home() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
-      <main className="flex flex-col items-center justify-center gap-8 px-4 py-16 text-center">
-        <div className="space-y-4">
-          <h1 className="text-5xl font-bold text-slate-900 dark:text-slate-50">
-            RunGait Pro
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
+      <main className="container mx-auto px-4 py-16 max-w-4xl">
+        {/* Header Section */}
+        <div className="text-center mb-12 space-y-4">
+          <h1 className="text-5xl font-bold text-white">
+            RunGait Analysis Platform
           </h1>
-          <p className="text-xl text-slate-600 dark:text-slate-400 max-w-md">
-            專業步態分析系統
-            <br />
-            透過 AI 技術提供精準的步態評估
+          <p className="text-xl text-slate-400">
+            Professional running gait analysis with transparent, evidence-based methodology
           </p>
         </div>
 
-        <div className="flex flex-col sm:flex-row gap-4 mt-8">
-          <Button asChild size="lg" className="text-lg px-8 py-6">
-            <Link href="/analyze">
-              <FileVideo className="w-5 h-5 mr-2" />
-              開始分析
-            </Link>
-          </Button>
-          <Button asChild size="lg" variant="outline" className="text-lg px-8 py-6">
-            <Link href="/compare">
-              <BarChart3 className="w-5 h-5 mr-2" />
-              比較分析
-            </Link>
-          </Button>
-        </div>
+        {/* Cards Section */}
+        <div className="space-y-6">
+          {/* Analyze Card */}
+          <Card className="bg-slate-800/50 border-slate-700 hover:bg-slate-800/70 transition-colors">
+            <CardHeader>
+              <div className="flex items-start gap-4">
+                <div className="p-3 rounded-lg bg-cyan-500/10">
+                  <TrendingUp className="w-6 h-6 text-cyan-400" />
+                </div>
+                <div className="flex-1">
+                  <CardTitle className="text-2xl text-white mb-2">Analyze</CardTitle>
+                  <CardDescription className="text-slate-400 text-base">
+                    Comprehensive gait analysis with phase markers, joint kinematics, and evidence-based findings
+                  </CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <Button asChild size="lg" className="w-full bg-cyan-500 hover:bg-cyan-600 text-white">
+                <Link href="/analyze">
+                  Open Analyzer
+                </Link>
+              </Button>
+            </CardContent>
+          </Card>
 
-        <div className="mt-12 text-sm text-slate-500 dark:text-slate-400">
-          <p>上傳您的步態影片，獲得專業的分析報告與改善建議</p>
+          {/* Compare Card */}
+          <Card className="bg-slate-800/50 border-slate-700 hover:bg-slate-800/70 transition-colors">
+            <CardHeader>
+              <div className="flex items-start gap-4">
+                <div className="p-3 rounded-lg bg-cyan-500/10">
+                  <GitCompare className="w-6 h-6 text-cyan-400" />
+                </div>
+                <div className="flex-1">
+                  <CardTitle className="text-2xl text-white mb-2">Compare</CardTitle>
+                  <CardDescription className="text-slate-400 text-base">
+                    Side-by-side comparison of before/after videos with transparent difference analysis
+                  </CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <Button asChild size="lg" variant="outline" className="w-full border-slate-600 text-white hover:bg-slate-700">
+                <Link href="/compare">
+                  Compare Sessions
+                </Link>
+              </Button>
+            </CardContent>
+          </Card>
         </div>
       </main>
     </div>
