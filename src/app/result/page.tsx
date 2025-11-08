@@ -92,6 +92,18 @@ export default function ResultPage() {
             {/* ✅ 分析完成時顯示結果 */}
             {job.status === "done" && job.result_json?.files ? (
               <div className="space-y-4">
+                {/* 🎞️ 預覽影片 */}
+                {job.result_signed_url && (
+                  <div className="mt-4">
+                    <p className="text-zinc-400 mb-2">分析結果預覽：</p>
+                    <video
+                      controls
+                      src={job.result_signed_url}
+                      className="w-full rounded-lg shadow-md border border-zinc-700"
+                    />
+                  </div>
+                )}
+                
                 {/* 🎬 影片下載 */}
                 <button
                   onClick={async () => {
