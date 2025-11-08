@@ -42,31 +42,35 @@ export default function UploadPage() {
     subscribedRef.current = false;
   };
 
-  // ===== 建立 Realtime 訂閱 =====
-  const subscribeOnce = (effectiveEmail: string) => {
-    if (!effectiveEmail || subscribedRef.current) return;
-    subscribedRef.current = true;
-    reconnectAttemptsRef.current = 0;
+  // ===== Realtime 訂閱（用 jobId） =====
+  const watchJob = (jobId: string) => {
+    if (channelRef.current) {
+      supabase.removeChannel(channelRef.current);
+      channelRef.current = null;
+    }
+    subscribedRef.current = false;
 
     const ch = supabase
-      .channel(`job-status-${effectiveEmail}`)
+      .channel(`job-status-${jobId}`)
       .on(
         "postgres_changes",
         {
           event: "*",
           schema: "public",
           table: "jobs",
-          filter: `user_email=eq.${effectiveEmail}`,
+          filter: `id=eq.${jobId}`,
         },
         (payload) => {
           const data = payload.new as { status?: string; error_msg?: string };
           const status = data?.status;
-          if (status === "processing") setMessage("🕐 分析中，請稍候...");
-          else if (status === "done") {
+
+          if (status === "processing") {
+            setMessage("🕐 分析中，請稍候…");
+          } else if (status === "done") {
             setMessage("✅ 分析完成！點擊下方按鈕查看結果");
             setUploading(false);
           } else if (status === "failed") {
-            setMessage(`❌ 分析失敗：${data.error_msg || "未知錯誤"}`);
+            setMessage(`❌ 分析失敗：${data?.error_msg || "未知錯誤"}`);
             setUploading(false);
           }
         }
@@ -77,6 +81,7 @@ export default function UploadPage() {
       });
 
     channelRef.current = ch;
+    subscribedRef.current = true;
   };
 
   // ===== Realtime 斷線重連監控 =====
@@ -85,18 +90,17 @@ export default function UploadPage() {
     const monitor = async () => {
       while (!cancelled) {
         await sleep(10000);
-        if (!debouncedEmailRef.current || isConnected || !subscribedRef.current) continue;
-        if (!navigator.onLine) continue;
-        if (reconnectAttemptsRef.current >= MAX_RECONNECT_ATTEMPTS) {
-          setMessage("🔴 Realtime 已中斷且重連達上限，請重新整理或稍後再試");
-          break;
+        if (!isConnected && subscribedRef.current && navigator.onLine) {
+          if (reconnectAttemptsRef.current >= MAX_RECONNECT_ATTEMPTS) {
+            setMessage("🔴 Realtime 已中斷且重連達上限，請重新整理或稍後再試");
+            break;
+          }
+          reconnectAttemptsRef.current += 1;
+          const delay = backoffDelay(reconnectAttemptsRef.current);
+          setMessage(`⚡ 嘗試重新連線中（第 ${reconnectAttemptsRef.current} 次）…`);
+          await sleep(delay);
+          if (debouncedEmailRef.current) subscribeOnce(debouncedEmailRef.current);
         }
-        reconnectAttemptsRef.current += 1;
-        const delay = backoffDelay(reconnectAttemptsRef.current);
-        setMessage(`⚡ 嘗試重新連線中（第 ${reconnectAttemptsRef.current} 次）…`);
-        await sleep(delay);
-        removeCurrentChannel();
-        subscribeOnce(debouncedEmailRef.current);
       }
     };
     monitor();
@@ -106,12 +110,17 @@ export default function UploadPage() {
   }, [isConnected]);
 
   // ===== Email 去抖動處理 =====
+  const subscribeOnce = (effectiveEmail: string) => {
+    if (!effectiveEmail || subscribedRef.current) return;
+    subscribedRef.current = true;
+    reconnectAttemptsRef.current = 0;
+  };
+
   useEffect(() => {
     if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
     if (!email) return;
     debounceTimerRef.current = window.setTimeout(() => {
       debouncedEmailRef.current = email.trim();
-      if (!subscribedRef.current) subscribeOnce(debouncedEmailRef.current);
     }, 500);
     return () => {
       if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
@@ -122,7 +131,7 @@ export default function UploadPage() {
     return () => removeCurrentChannel();
   }, []);
 
-  // ===== 本地頻率限制 (localStorage) =====
+  // ===== 本地頻率限制 =====
   const checkLocalQuota = () => {
     try {
       const key = "upload_history_v1";
@@ -141,7 +150,7 @@ export default function UploadPage() {
     }
   };
 
-  // ===== 從 Supabase 檢查 Email 上傳次數 (真正根據帳號) =====
+  // ===== 檢查 Email 上傳次數 =====
   async function checkEmailQuota(email: string) {
     const oneHourAgo = new Date(Date.now() - 3600 * 1000).toISOString();
     const { data, error } = await supabase
@@ -162,17 +171,16 @@ export default function UploadPage() {
     return { ok: true };
   }
 
-  // ===== 備援：輪詢 job 狀態 =====
-  async function pollJobStatus(email: string) {
-    const MAX_POLLS = 24;
+  // ===== 輪詢 job 狀態（改用 jobId） =====
+  async function pollJobStatusById(jobId: string) {
+    const MAX_POLLS = 120; // 最多等10分鐘
     for (let i = 0; i < MAX_POLLS; i++) {
       const { data } = await supabase
         .from("jobs")
         .select("status")
-        .eq("user_email", email)
-        .order("created_at", { ascending: false })
-        .limit(1)
+        .eq("id", jobId)
         .maybeSingle();
+
       if (data?.status === "done") {
         setMessage("✅ 分析完成！點擊下方按鈕查看結果");
         setUploading(false);
@@ -182,9 +190,11 @@ export default function UploadPage() {
         setUploading(false);
         return;
       }
+
       await sleep(5000);
     }
-    setMessage("⌛ 等待分析超時，請稍後重試。");
+
+    setMessage("🕓 伺服器忙碌，任務可能仍在排程/處理中，請稍後再查看結果。");
   }
 
   // ===== 上傳處理 =====
@@ -197,12 +207,10 @@ export default function UploadPage() {
     const ext = file.name.toLowerCase();
     if (!ALLOWED_EXT.some((x) => ext.endsWith(x))) return setMessage("檔案格式不支援");
 
-    // ✅ Step 1: 先檢查帳號上傳次數（跨裝置有效）
     const quotaByEmail = await checkEmailQuota(email);
     if (!quotaByEmail.ok)
       return setMessage(`⛔ ${email} 一小時內已上傳 3 次，請 ${quotaByEmail.remain} 分鐘後再試`);
 
-    // ✅ Step 2: 本地限制（防止誤觸連續上傳）
     const quota = checkLocalQuota();
     if (!quota.ok)
       return setMessage(`⛔ 本機上傳過於頻繁，請 ${quota.remain} 分鐘後再試`);
@@ -215,21 +223,34 @@ export default function UploadPage() {
       const { error: upErr } = await supabase.storage.from("videos").upload(path, file);
       if (upErr) throw upErr;
 
-      const { error: insErr } = await supabase.from("jobs").insert({
-        user_email: email,
-        storage_path: path,
-        status: "pending",
-        orig_filename: file.name,
-        video_fps: videoFPS,
-      });
+      // ✅ 新版 insert：取得 job_id
+      const { data: inserted, error: insErr } = await supabase
+        .from("jobs")
+        .insert({
+          user_email: email,
+          storage_path: path,
+          status: "pending",
+          orig_filename: file.name,
+          video_fps: videoFPS,
+        })
+        .select("id")
+        .single();
+
       if (insErr) throw insErr;
+      const jobId = inserted.id;
 
       setMessage("✅ 影片已上傳成功，正在分析中…");
-      pollJobStatus(email);
+
+      // ✅ 監看該 jobId
+      watchJob(jobId);
+
+      // ✅ 延遲幾秒再開始輪詢，避免 worker 尚未處理
+      setTimeout(() => {
+        pollJobStatusById(jobId);
+      }, 8000);
     } catch (err: any) {
       console.error(err);
       setMessage(`❌ 錯誤：${err.message}`);
-    } finally {
       setUploading(false);
     }
   };
@@ -239,6 +260,7 @@ export default function UploadPage() {
     <main className="min-h-screen flex flex-col items-center justify-center bg-zinc-50 dark:bg-black p-6 relative">
       <div className="bg-white/10 dark:bg-zinc-900 p-8 rounded-2xl shadow-lg w-full max-w-md space-y-5 border border-zinc-700">
         <h1 className="text-3xl font-bold text-center">上傳影片進行分析</h1>
+
         <input
           type="email"
           placeholder="輸入 Email"
@@ -246,12 +268,14 @@ export default function UploadPage() {
           onChange={(e) => setEmail(e.target.value)}
           className="w-full border p-2 rounded-md bg-white/60 dark:bg-zinc-800"
         />
+
         <input
           type="file"
           accept="video/*"
           onChange={(e) => setFile(e.target.files?.[0] ?? null)}
           className="w-full border p-2 rounded-md bg-white/60 dark:bg-zinc-800"
         />
+
         <input
           type="number"
           min={1}
@@ -262,6 +286,7 @@ export default function UploadPage() {
           className="w-full border p-2 rounded-md bg-white/60 dark:bg-zinc-800"
           placeholder="影片 FPS (預設 120)"
         />
+
         <button
           disabled={uploading}
           onClick={handleUpload}
