@@ -8,6 +8,7 @@ import { supabase } from "@/lib/supabaseClient";
 // ===== 可調參數 =====
 const MAX_SIZE = 50 * 1024 * 1024;
 const ALLOWED_EXT = [".mp4", ".mov", ".m4v", ".avi", ".webm"];
+const UPLOADS_PER_10MIN_LIMIT = 5;
 const UPLOADS_PER_HOUR_LIMIT = 3;
 
 const MAX_RECONNECT_ATTEMPTS = 5;
@@ -16,7 +17,7 @@ const RECONNECT_MAX_DELAY_MS = 30000;
 
 export default function UploadPage() {
   const [email, setEmail] = useState("");
-  const [frameCount, setFrameCount] = useState(300);
+  const [videoFPS, setVideoFPS] = useState(30);
   const [file, setFile] = useState<File | null>(null);
   const [message, setMessage] = useState("");
   const [uploading, setUploading] = useState(false);
@@ -126,10 +127,10 @@ export default function UploadPage() {
     try {
       const key = "upload_history_v1";
       const now = Date.now();
-      const oneHour = now - 3600 * 1000;
-      const arr = JSON.parse(localStorage.getItem(key) || "[]").filter((t: number) => t > oneHour);
-      if (arr.length >= UPLOADS_PER_HOUR_LIMIT) {
-        const remain = 60 - Math.floor((now - arr[0]) / 60000);
+      const tenMinutesAgo = now - 10 * 60 * 1000;
+      const arr = JSON.parse(localStorage.getItem(key) || "[]").filter((t: number) => t > tenMinutesAgo);
+      if (arr.length >= UPLOADS_PER_10MIN_LIMIT) {
+        const remain = Math.max(10 - Math.floor((now - arr[0]) / 60000), 0);
         return { ok: false, remain };
       }
       arr.push(now);
@@ -147,7 +148,8 @@ export default function UploadPage() {
       .from("jobs")
       .select("created_at")
       .eq("user_email", email)
-      .gte("created_at", oneHourAgo);
+      .gte("created_at", oneHourAgo)
+      .order("created_at", { ascending: true });
     if (error) {
       console.error("查詢上傳次數錯誤:", error);
       return { ok: true };
@@ -215,10 +217,10 @@ export default function UploadPage() {
 
       const { error: insErr } = await supabase.from("jobs").insert({
         user_email: email,
-        frame_count: frameCount,
         storage_path: path,
         status: "pending",
         orig_filename: file.name,
+        video_fps: videoFPS,
       });
       if (insErr) throw insErr;
 
@@ -249,6 +251,16 @@ export default function UploadPage() {
           accept="video/*"
           onChange={(e) => setFile(e.target.files?.[0] ?? null)}
           className="w-full border p-2 rounded-md bg-white/60 dark:bg-zinc-800"
+        />
+        <input
+          type="number"
+          min={1}
+          max={240}
+          step={1}
+          value={videoFPS}
+          onChange={(e) => setVideoFPS(Number(e.target.value) || 0)}
+          className="w-full border p-2 rounded-md bg-white/60 dark:bg-zinc-800"
+          placeholder="影片 FPS (預設 30)"
         />
         <button
           disabled={uploading}
