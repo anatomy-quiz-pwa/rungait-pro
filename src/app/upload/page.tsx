@@ -17,7 +17,7 @@ const RECONNECT_MAX_DELAY_MS = 30000;
 
 export default function UploadPage() {
   const [email, setEmail] = useState("");
-  const [videoFPS, setVideoFPS] = useState(30);
+  const [videoFPS, setVideoFPS] = useState(120);
   const [file, setFile] = useState<File | null>(null);
   const [message, setMessage] = useState("");
   const [uploading, setUploading] = useState(false);
@@ -260,7 +260,7 @@ export default function UploadPage() {
           value={videoFPS}
           onChange={(e) => setVideoFPS(Number(e.target.value) || 0)}
           className="w-full border p-2 rounded-md bg-white/60 dark:bg-zinc-800"
-          placeholder="影片 FPS (預設 30)"
+          placeholder="影片 FPS (預設 120)"
         />
         <button
           disabled={uploading}
