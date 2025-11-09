@@ -5,7 +5,7 @@ import Link from "next/link";
 import dynamic from "next/dynamic";
 import { supabase } from "@/lib/supabaseClient";
 
-// Chart.js 核心（SSR 安全）
+// Chart.js 核心（可 SSR 載入）
 import {
   Chart as ChartJS,
   LineElement,
@@ -16,7 +16,7 @@ import {
   Tooltip,
 } from "chart.js";
 
-// 外掛改「動態載入」避免 SSR 期觸發 window
+// 外掛改成動態載入（僅瀏覽器），避免 Vercel SSR 期讀到 window
 let annotationPlugin: any = null;
 let zoomPlugin: any = null;
 
@@ -31,11 +31,14 @@ type FileEntry = { bucket: string; path: string };
 type ChartSeries = { id: string; label: string; unit: string; y: Array<number | null> };
 type ChartJSON = {
   version: string;
-  video?: { fps_used?: number; frame_count: number };
+  video: { fps_used: number; frame_count: number };
   series: ChartSeries[];
   events: { IC: number[]; TO: number[]; M_stance: number[]; M_swing: number[] };
   style?: Record<string, string>;
 };
+
+// export const dynamic = "force-dynamic";
+// export const revalidate = 0;
 
 export default function ResultPage() {
   const [email, setEmail] = useState("");
@@ -48,11 +51,7 @@ export default function ResultPage() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const chartRef = useRef<any>(null);
 
-  // 影片目前實際幀（紅線）
   const [currentFrame, setCurrentFrame] = useState(0);
-  // 使用者「播放軸」選取幀（橘線）：可點圖、平移/縮放改變它並 seek
-  const [selectionFrame, setSelectionFrame] = useState(0);
-
   const [isUserPanning, setIsUserPanning] = useState(false);
 
   // 事件線開關
@@ -64,7 +63,13 @@ export default function ResultPage() {
   // 各曲線開關
   const [showSeries, setShowSeries] = useState<Record<string, boolean>>({});
 
-  // ── 僅在瀏覽器端載入插件
+  // 影片 FPS（優先用 jobs.video_fps）
+  const fpsRef = useRef<number>(120);
+
+  // 左右留白幀數（讓中央指針能指到第 0 與最後一幀）
+  const PAD_FRAMES = 120; // 你可改 60/180…依需求
+
+  // 僅在瀏覽器端載入插件
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -78,9 +83,7 @@ export default function ResultPage() {
       ChartJS.register(annotationPlugin, zoomPlugin);
       setPluginsReady(true);
     })();
-    return () => {
-      cancelled = true;
-    };
+    return () => void (cancelled = true);
   }, []);
 
   // 讀網址參數並載入最新 job
@@ -93,7 +96,6 @@ export default function ResultPage() {
     }
   }, []);
 
-  // ✅ 取用 video_fps 一起帶回來
   async function fetchLatestResult(email: string) {
     setLoading(true);
     const { data, error } = await supabase
@@ -113,6 +115,9 @@ export default function ResultPage() {
     }
 
     setJob(data);
+    if (typeof data?.video_fps === "number" && data.video_fps > 0) {
+      fpsRef.current = data.video_fps;
+    }
 
     const files: Record<string, FileEntry> | undefined = data?.result_json?.files;
     if (files) {
@@ -125,10 +130,6 @@ export default function ResultPage() {
       }
     }
 
-    // 初始指針在第 0 幀
-    setSelectionFrame(0);
-    setCurrentFrame(0);
-
     setLoading(false);
   }
 
@@ -138,7 +139,11 @@ export default function ResultPage() {
       if (error) throw error;
       const json: ChartJSON = JSON.parse(await data.text());
       setChartData(json);
-      // 初始化曲線顯示（全開）
+      // 若 jobs 沒給 fps，就用 chart.json 的
+      if ((!fpsRef.current || fpsRef.current <= 0) && json?.video?.fps_used) {
+        fpsRef.current = json.video.fps_used;
+      }
+      // 初始化各曲線顯示（預設全開）
       const init: Record<string, boolean> = {};
       (json.series || []).forEach((s) => (init[s.id] = true));
       setShowSeries(init);
@@ -165,16 +170,7 @@ export default function ResultPage() {
     }
   }
 
-  // ✔ FPS：優先 chart.json，其次 jobs.video_fps，再來 120
-  const fpsUsed = useMemo(() => {
-    return (
-      chartData?.video?.fps_used ||
-      job?.video_fps ||
-      120
-    );
-  }, [chartData, job]);
-
-  // Z-score（僅用來同軸顯示；tooltip 僅顯示角度）
+  // Z-score（僅用來等化尺度；tooltip 只顯示角度）
   function zNormalize(y: Array<number | null>) {
     const vals = y.filter((v): v is number => typeof v === "number" && Number.isFinite(v));
     const mean = vals.reduce((a, b) => a + b, 0) / (vals.length || 1);
@@ -183,7 +179,14 @@ export default function ResultPage() {
     return { mean, std, z: y.map((v) => (typeof v === "number" ? (v - mean) / std : null)) };
   }
 
-  // 事件線 annotations
+  // 把 series 前後補空白（null）以對齊 PAD_FRAMES
+  function padSeries(y: Array<number | null>, pad: number, tailPad: number) {
+    const front = Array(pad).fill(null);
+    const back = Array(tailPad).fill(null);
+    return [...front, ...y, ...back];
+  }
+
+  // 事件線（annotation）— 注意 x 軸要 +PAD_FRAMES
   const annotations = useMemo(() => {
     if (!chartData) return {};
     const build = (arr: number[], color: string, label: string, show: boolean) =>
@@ -192,8 +195,8 @@ export default function ResultPage() {
           `${label}_${i}`,
           {
             type: "line",
-            xMin: f,
-            xMax: f,
+            xMin: f + PAD_FRAMES,
+            xMax: f + PAD_FRAMES,
             borderColor: color,
             borderWidth: 1.5,
             borderDash: [4, 4],
@@ -218,29 +221,28 @@ export default function ResultPage() {
     };
   }, [chartData, showIC, showTO, showMs, showMw]);
 
-  // Chart 資料與選項
-  const { chartJsData, chartJsOptions } = useMemo(() => {
-    if (!chartData) return { chartJsData: null, chartJsOptions: null };
+  // ====== Chart 資料與選項（延伸時間軸）======
+  const { chartJsData, chartJsOptions, extendedCount } = useMemo(() => {
+    if (!chartData) return { chartJsData: null, chartJsOptions: null, extendedCount: 0 };
 
-    const frames = chartData.video?.frame_count ?? Math.max(...chartData.series.map(s => s.y.length));
-    const labels = Array.from({ length: frames }, (_, i) => i);
+    const N = chartData.video.frame_count;           // 真實幀數
+    const labels = Array.from({ length: N + PAD_FRAMES * 2 }, (_, i) => i); // 0..N-1 中間，左右各 PAD_FRAMES 的空白區
+
     const computed = chartData.series.map((s) => {
-      const { mean, std, z } = zNormalize(s.y);
+      const { z } = zNormalize(s.y);
       return {
         id: s.id,
         label: s.label,
         unit: s.unit,
-        mean,
-        std,
-        z,
         raw: s.y,
+        z,
         color: chartData.style?.[s.id] || "#7dd3fc",
       };
     });
 
     const datasets = computed.map((c) => ({
       label: c.label,
-      data: c.z,
+      data: padSeries(c.z, PAD_FRAMES, PAD_FRAMES), // 以 z 畫線，但兩端補 null
       borderColor: c.color,
       borderWidth: 1.8,
       pointRadius: 0,
@@ -255,35 +257,41 @@ export default function ResultPage() {
     const options: any = {
       responsive: true,
       animation: false,
-      layout: { padding: { left: 4, right: 4, top: 4, bottom: 2 } }, // 減少留白
+      layout: { padding: { left: 4, right: 4, top: 4, bottom: 2 } }, // 減留白
       plugins: {
-        legend: { display: false }, // 自訂 checkbox
+        legend: { display: false },
         tooltip: {
           mode: "index",
           intersect: false,
           callbacks: {
-            // 只回報角度（不顯示 z）
+            // 只顯示角度（不顯示 z）
             label: (ctx: any) => {
-              const ds = computed[ctx.datasetIndex];
-              const raw = ds.raw?.[ctx.dataIndex];
-              return `${ds.label}: ${raw?.toFixed?.(2) ?? "NA"} ${ds.unit}`;
+              const dsIdx = ctx.datasetIndex;
+              const idx = ctx.dataIndex;
+              const series = computed[dsIdx];
+              // 把延伸後的索引換回真實幀
+              const realFrame = idx - PAD_FRAMES;
+              const raw =
+                realFrame >= 0 && realFrame < (chartData?.video?.frame_count || 0)
+                  ? series.raw?.[realFrame]
+                  : null;
+              return `${series.label}: ${raw?.toFixed?.(2) ?? "NA"} ${series.unit}`;
             },
           },
         },
         annotation: { annotations },
         zoom: {
           zoom: {
-            wheel: { enabled: true, modifierKey: "ctrl" }, // 桌機 Ctrl+滾輪縮放
-            pinch: { enabled: true },                       // 手機雙指縮放
+            wheel: { enabled: true, modifierKey: "ctrl" }, // 桌機 Ctrl+滾輪
+            pinch: { enabled: true },                      // 手機雙指縮放
             mode: "x",
             onZoomStart: () => setIsUserPanning(true),
             onZoomComplete: (ctx: any) => {
               setIsUserPanning(false);
-              // 縮放完成 → 用「視窗中心幀」當成播放軸（橘線）並 seek
               const x = ctx.chart.scales.x;
-              const center = Math.round((x.min + x.max) / 2);
-              setSelectionFrame(center);
-              seekToFrame(center);
+              const centerIdx = Math.round((x.min + x.max) / 2);
+              const frame = centerIdx - PAD_FRAMES; // 還原回真實幀
+              seekToFrame(frame);
             },
           },
           pan: {
@@ -292,23 +300,22 @@ export default function ResultPage() {
             onPanStart: () => setIsUserPanning(true),
             onPanComplete: (ctx: any) => {
               setIsUserPanning(false);
-              // 平移完成 → 同上：以視窗中心幀當播放軸並 seek
               const x = ctx.chart.scales.x;
-              const center = Math.round((x.min + x.max) / 2);
-              setSelectionFrame(center);
-              seekToFrame(center);
+              const centerIdx = Math.round((x.min + x.max) / 2);
+              const frame = centerIdx - PAD_FRAMES;
+              seekToFrame(frame);
             },
           },
-          limits: {
-            x: { min: 0, max: frames - 1 },
-          },
+          limits: { x: { min: 0, max: labels.length - 1 } },
         },
       },
       scales: {
         x: {
           title: { display: false },
-          ticks: { autoSkip: true, maxRotation: 0, font: { size: 10 } }, // 小字
+          ticks: { autoSkip: true, maxRotation: 0, font: { size: 10 } },
           grid: { drawOnChartArea: true, color: "rgba(255,255,255,0.06)" },
+          min: 0,                         // 初始視窗：讓中央指針指在第 0 幀
+          max: PAD_FRAMES * 2,            // 也就是 [-PAD, +PAD] 的寬度
         },
         z: {
           type: "linear",
@@ -322,57 +329,33 @@ export default function ResultPage() {
       },
       interaction: { mode: "nearest", intersect: false },
       maintainAspectRatio: false,
-      // 點擊圖：把播放軸（橘線）設為該點並 seek
+      // 點擊圖：跳轉至對應幀
       onClick: (evt: any, _els: any, chart: any) => {
         const xScale = chart.scales.x;
         const rect = chart.canvas.getBoundingClientRect();
-        const frame = Math.round(xScale.getValueForPixel(evt.clientX - rect.left));
-        setSelectionFrame(frame);
+        const idx = Math.round(xScale.getValueForPixel(evt.clientX - rect.left));
+        const frame = idx - PAD_FRAMES;
         seekToFrame(frame);
       },
     };
 
-    return { chartJsData: data, chartJsOptions: options };
+    return { chartJsData: data, chartJsOptions: options, extendedCount: labels.length };
   }, [chartData, annotations, showSeries]);
 
-  // 🔴 紅色同步線（影片目前幀）
-  const syncLinePlugin = {
-    id: "syncLine",
+  // 固定「中央指針」
+  const centerPointerPlugin = {
+    id: "centerPointer",
     afterDatasetsDraw(chart: any) {
-      const { ctx, chartArea, scales } = chart;
+      const { ctx, chartArea } = chart;
       if (!ctx || !chartArea) return;
-      const xScale = scales.x;
-      const x = xScale.getPixelForValue(currentFrame);
-      if (!Number.isFinite(x)) return;
+      const cx = (chartArea.left + chartArea.right) / 2; // 固定中央
       ctx.save();
       ctx.beginPath();
-      ctx.moveTo(x, chartArea.top);
-      ctx.lineTo(x, chartArea.bottom);
-      ctx.setLineDash([6, 6]);
-      ctx.lineWidth = 2;
-      ctx.strokeStyle = "#ff4d4f";
-      ctx.stroke();
-      ctx.restore();
-    },
-  };
-
-  // 🟠 橘色播放軸指針（可達兩端）：畫在 selectionFrame 的實際位置
-  const pointerPlugin = {
-    id: "pointerPlugin",
-    afterDatasetsDraw(chart: any) {
-      const { ctx, chartArea, scales } = chart;
-      if (!ctx || !chartArea) return;
-      const xScale = scales.x;
-      // 指針位置用「選取幀」→ 能落在最左/右端
-      const px = xScale.getPixelForValue(selectionFrame);
-      const x = Math.max(chartArea.left, Math.min(chartArea.right, px));
-      ctx.save();
-      ctx.beginPath();
-      ctx.moveTo(x, chartArea.top);
-      ctx.lineTo(x, chartArea.bottom);
+      ctx.moveTo(cx, chartArea.top);
+      ctx.lineTo(cx, chartArea.bottom);
       ctx.setLineDash([4, 4]);
       ctx.lineWidth = 2;
-      ctx.strokeStyle = "#fb923c"; // 橘線
+      ctx.strokeStyle = "#fb923c"; // 橘色
       ctx.stroke();
       ctx.restore();
     },
@@ -381,46 +364,48 @@ export default function ResultPage() {
   // 影片 ↔ 圖表 雙向同步
   function seekToFrame(frame: number) {
     if (!chartData || !videoRef.current) return;
-    const last = (chartData.video?.frame_count ?? 1) - 1;
-    const f = Math.max(0, Math.min(last, frame));
-    const t = f / (fpsUsed || 120);
+    const N = chartData.video.frame_count;
+    const f = Math.max(0, Math.min(N - 1, Math.round(frame)));
+    const fps = fpsRef.current || 120;
+    const t = f / fps;
     videoRef.current.currentTime = t;
     setCurrentFrame(f);
-    // 自動保持「選取幀」在可視範圍（能置中就置中；邊界就貼邊）
-    followFrameInView(f);
+    // 將視窗中心設在 f（加上 pad 偏移）
+    centerViewOnIndex(f + PAD_FRAMES);
   }
 
-  // 自動卷動：讓 f 落在視窗中；能置中就置中，否則貼邊界
-  function followFrameInView(f: number) {
+  // 讓圖表視窗中心對齊某個「延伸索引」（即 frame + PAD_FRAMES）
+  function centerViewOnIndex(centerIdx: number) {
     const chart = chartRef.current;
-    if (!chart || !chart.scales || !chart.scales.x || !chartData) return;
+    if (!chart || !chart.scales || !chart.scales.x) return;
     const x = chart.scales.x;
-    const last = (chartData.video?.frame_count ?? 1) - 1;
-    const width = Math.max(10, x.max - x.min); // 視窗寬度
-    let newMin = Math.round(f - width / 2);
-    let newMax = Math.round(f + width / 2);
-    if (newMin < 0) { newMax += -newMin; newMin = 0; }
-    if (newMax > last) { newMin -= (newMax - last); newMax = last; }
-    if (newMin === x.min && newMax === x.max) return; // 無變化
+    // 維持目前視窗寬度（至少 10）
+    const width = Math.max(10, (x.max ?? 0) - (x.min ?? 0));
+    let newMin = centerIdx - width / 2;
+    let newMax = centerIdx + width / 2;
+    const lo = 0;
+    const hi = (chart.data?.labels?.length ?? 1) - 1;
+    if (newMin < lo) { newMax += lo - newMin; newMin = lo; }
+    if (newMax > hi) { newMin -= newMax - hi; newMax = hi; }
     chart.options.scales.x.min = newMin;
     chart.options.scales.x.max = newMax;
     chart.update("none");
   }
 
-  // 每 100ms 從影片回寫目前幀；若使用者沒在拖，就以目前幀當「播放軸」並跟隨
+  // 每 100ms 從影片回寫目前幀；若使用者在拖動/縮放，就不自動捲動
   useEffect(() => {
     if (!chartData || !videoRef.current) return;
     const timer = setInterval(() => {
+      const fps = fpsRef.current || 120;
       const t = videoRef.current!.currentTime || 0;
-      const f = Math.round(t * (fpsUsed || 120));
+      const f = Math.round(t * fps);
       setCurrentFrame(f);
       if (!isUserPanning) {
-        setSelectionFrame(f);     // 播放時橘線跟著跑
-        followFrameInView(f);     // 自動卷動
+        centerViewOnIndex(f + PAD_FRAMES);
       }
     }, 100);
     return () => clearInterval(timer);
-  }, [chartData, fpsUsed, isUserPanning]);
+  }, [chartData, isUserPanning]);
 
   const baseBtn =
     "w-full py-3 rounded-lg font-semibold text-white transition inline-flex items-center justify-center shadow-md text-lg";
@@ -461,12 +446,6 @@ export default function ResultPage() {
                     controls
                     src={job.result_signed_url}
                     className="w-full rounded-lg shadow-md border border-zinc-700"
-                    onLoadedMetadata={() => {
-                      // 初始進來把視窗對到 0 幀
-                      setCurrentFrame(0);
-                      setSelectionFrame(0);
-                      followFrameInView(0);
-                    }}
                   />
                 )}
 
@@ -506,18 +485,17 @@ export default function ResultPage() {
                   </div>
                 )}
 
-                {/* 📈 圖表（橘線＝可操作指針；紅線＝影片同步；支援縮放/平移/點擊） */}
+                {/* 📈 圖表（圖＝播放軸｜中央指針固定｜兩端補空白｜平移縮放｜點擊跳轉） */}
                 {pluginsReady && chartData && chartJsData && chartJsOptions ? (
                   <div className="h-72 sm:h-80 w-full bg-black/10 dark:bg-white/5 rounded-lg p-2 border border-zinc-700">
                     <Line
                       ref={chartRef}
                       data={chartJsData as any}
                       options={chartJsOptions as any}
-                      plugins={[annotationPlugin, zoomPlugin, syncLinePlugin, pointerPlugin]}
+                      plugins={[annotationPlugin, zoomPlugin, { ...centerPointerPlugin }]}
                     />
                     <p className="mt-2 text-xs text-zinc-400 text-left">
-                      橘線＝播放軸，可點擊圖表或平移/縮放後自動定位並跳片段；紅線＝影片目前幀。
-                      手機：雙指縮放、拖曳平移；桌機：Ctrl+滾輪縮放、拖曳平移。
+                      中央橘線＝播放指針。平移/縮放後，影片會跳到指針所指幀。手機：雙指縮放、拖曳平移；桌機：Ctrl+滾輪縮放、拖曳平移；點擊圖表可跳轉。
                     </p>
                   </div>
                 ) : (
