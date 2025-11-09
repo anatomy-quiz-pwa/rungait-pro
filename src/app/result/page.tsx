@@ -290,6 +290,8 @@ export default function ResultPage() {
           pan: {
             enabled: true,
             mode: "x",
+            speed: 1,         // ← 拖動靈敏度提升，1px 也能動
+            threshold: 0,     // ← 沒有最小啟動距離
             onPanStart: () => setIsUserPanning(true),
             onPanComplete: (ctx: any) => {
               setIsUserPanning(false);
@@ -381,6 +383,12 @@ export default function ResultPage() {
     setCurrentFrame(f);
     centerViewOnIndex(f + PAD_FRAMES);
   }
+  function stepFrame(delta: number) {
+    if (!chartData) return;
+    const N = chartData.video.frame_count;
+    const next = Math.min(Math.max(currentFrame + delta, 0), N - 1);
+    seekToFrame(next);
+  }
 
   function centerViewOnIndex(centerIdx: number) {
     const chart = chartRef.current;
@@ -420,6 +428,17 @@ export default function ResultPage() {
     }, 100);
     return () => clearInterval(timer);
   }, [chartData, isUserPanning]);
+
+  // 鍵盤控制左右鍵（全域監聽）
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "ArrowLeft") stepFrame(-1);
+      else if (e.key === "ArrowRight") stepFrame(+1);
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [currentFrame, chartData]);
+
 
   const baseBtn =
     "w-full py-3 rounded-lg font-semibold text-white transition inline-flex items-center justify-center shadow-md text-lg";
@@ -529,6 +548,23 @@ export default function ResultPage() {
                     {pluginsReady ? "尚未取得圖表資料（chart.json）。" : "載入圖表外掛中…"}
                   </p>
                 )}
+
+                {/* 新增：左右箭頭按鈕 */}
+                <div className="flex items-center justify-center gap-4 mt-3">
+                  <button
+                    onClick={() => stepFrame(-1)}
+                    className="px-3 py-2 bg-zinc-700 text-white rounded hover:bg-zinc-600"
+                  >
+                    ← 上一幀
+                  </button>
+                  <span className="text-sm text-zinc-400">目前幀：{currentFrame}</span>
+                  <button
+                    onClick={() => stepFrame(+1)}
+                    className="px-3 py-2 bg-zinc-700 text-white rounded hover:bg-zinc-600"
+                  >
+                    下一幀 →
+                  </button>
+                </div>
 
                 {Object.entries(job.result_json.files)
                   .filter(([n]) => n.toLowerCase().endsWith(".mp4"))
