@@ -13,11 +13,21 @@ import {
   Tooltip,
 } from "chart.js";
 import annotationPlugin from "chartjs-plugin-annotation";
+import zoomPlugin from "chartjs-plugin-zoom";
 import { Line } from "react-chartjs-2";
 
-ChartJS.register(LineElement, CategoryScale, LinearScale, PointElement, Legend, Tooltip, annotationPlugin);
+ChartJS.register(
+  LineElement,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  Legend,
+  Tooltip,
+  annotationPlugin,
+  zoomPlugin
+);
 
-// ===== 型別定義 =====
+/* ---------- 型別 ---------- */
 type FileEntry = { bucket: string; path: string };
 type ChartSeries = { id: string; label: string; unit: string; y: Array<number | null> };
 type ChartJSON = {
@@ -28,22 +38,29 @@ type ChartJSON = {
   style?: Record<string, string>;
 };
 
-// ===== 主組件 =====
+/* ---------- 主頁 ---------- */
 export default function ResultPage() {
   const [email, setEmail] = useState("");
   const [job, setJob] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [chartData, setChartData] = useState<ChartJSON | null>(null);
-  const videoRef = useRef<HTMLVideoElement | null>(null);
-  const [currentFrame, setCurrentFrame] = useState<number>(0);
 
-  // 事件開關
+  // video & chart sync
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const chartRef = useRef<any>(null);
+  const [currentFrame, setCurrentFrame] = useState(0);
+  const [isScrubbing, setIsScrubbing] = useState(false); // slider拖曳時暫停回寫
+
+  // 事件線開關
   const [showIC, setShowIC] = useState(true);
   const [showTO, setShowTO] = useState(true);
   const [showMs, setShowMs] = useState(true);
   const [showMw, setShowMw] = useState(true);
 
-  // ===== 載入資料 =====
+  // 曲線可見性（動態依 series id）
+  const [showSeries, setShowSeries] = useState<Record<string, boolean>>({});
+
+  /* ---------- 載入最新 job ---------- */
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const emailParam = params.get("email");
@@ -91,12 +108,16 @@ export default function ResultPage() {
       if (error) throw error;
       const json: ChartJSON = JSON.parse(await data.text());
       setChartData(json);
+      // 初始化各曲線可見性（預設全開）
+      const init: Record<string, boolean> = {};
+      (json.series || []).forEach((s) => (init[s.id] = true));
+      setShowSeries(init);
     } catch (err) {
       console.error("❌ 載入 chart.json 失敗:", err);
     }
   }
 
-  // ===== 檔案下載 =====
+  /* ---------- 下載 ---------- */
   async function handleDownload(bucket: string, path: string, filename: string) {
     try {
       const { data, error } = await supabase.storage.from(bucket).download(path);
@@ -114,16 +135,16 @@ export default function ResultPage() {
     }
   }
 
-  // ===== Z-score 正規化 =====
+  /* ---------- Z-score ---------- */
   function zNormalize(y: Array<number | null>) {
     const vals = y.filter((v): v is number => typeof v === "number" && Number.isFinite(v));
     const mean = vals.reduce((a, b) => a + b, 0) / (vals.length || 1);
     const std =
       Math.sqrt(vals.reduce((acc, v) => acc + (v - mean) ** 2, 0) / (vals.length || 1)) || 1;
-    return { mean, std, z: y.map(v => (typeof v === "number" ? (v - mean) / std : null)) };
+    return { mean, std, z: y.map((v) => (typeof v === "number" ? (v - mean) / std : null)) };
   }
 
-  // ===== annotation 事件線 =====
+  /* ---------- 事件線 annotation ---------- */
   const annotations = useMemo(() => {
     if (!chartData) return {};
     const build = (arr: number[], color: string, label: string, show: boolean) =>
@@ -158,12 +179,12 @@ export default function ResultPage() {
     };
   }, [chartData, showIC, showTO, showMs, showMw]);
 
-  // ===== 圖表資料與選項 =====
+  /* ---------- Chart.js data & options ---------- */
   const { chartJsData, chartJsOptions } = useMemo(() => {
     if (!chartData) return { chartJsData: null, chartJsOptions: null };
 
     const labels = Array.from({ length: chartData.video.frame_count }, (_, i) => i);
-    const computed = chartData.series.map(s => {
+    const computed = chartData.series.map((s) => {
       const { mean, std, z } = zNormalize(s.y);
       return {
         id: s.id,
@@ -177,8 +198,8 @@ export default function ResultPage() {
       };
     });
 
-    const datasets = computed.map(c => ({
-      label: `${c.label}`,
+    const datasets = computed.map((c) => ({
+      label: c.label,
       data: c.z,
       borderColor: c.color,
       borderWidth: 1.8,
@@ -186,6 +207,7 @@ export default function ResultPage() {
       spanGaps: true,
       yAxisID: "z",
       tension: 0.25,
+      hidden: showSeries[c.id] === false, // 依使用者勾選控制
     }));
 
     const data = { labels, datasets };
@@ -194,20 +216,38 @@ export default function ResultPage() {
       responsive: true,
       animation: false,
       plugins: {
-        legend: { position: "top" },
+        legend: { display: false }, // 我們自己做 checkbox
         tooltip: {
           mode: "index",
           intersect: false,
           callbacks: {
             label: (ctx: any) => {
-              const ds = computed[ctx.datasetIndex];
-              const raw = ds.raw?.[ctx.dataIndex];
-              const z = ds.z?.[ctx.dataIndex];
-              return `${ds.label}: ${raw?.toFixed?.(2) ?? "NA"} ${ds.unit} | z=${z?.toFixed?.(2) ?? "NA"}`;
+              const dsIndex = ctx.datasetIndex;
+              const frameIdx = ctx.dataIndex;
+              const c = computed[dsIndex];
+              const raw = c.raw?.[frameIdx];
+              const z = c.z?.[frameIdx];
+              return `${c.label}: ${raw?.toFixed?.(2) ?? "NA"} ${c.unit} | z=${z?.toFixed?.(2) ?? "NA"}`;
             },
           },
         },
         annotation: { annotations },
+        // 🔍 縮放/平移（桌機：Ctrl+滾輪縮放、拖曳平移；手機：雙指捏合縮放、單指拖曳平移）
+        zoom: {
+          zoom: {
+            wheel: { enabled: true, modifierKey: "ctrl" }, // 避免誤觸滾輪
+            pinch: { enabled: true },
+            mode: "x",
+          },
+          pan: {
+            enabled: true,
+            mode: "x",
+            modifierKey: null, // 觸控 & 滑鼠拖曳都可平移
+          },
+          limits: {
+            x: { min: 0, max: chartData.video.frame_count - 1 },
+          },
+        },
       },
       scales: {
         x: { title: { display: true, text: "Frame" } },
@@ -221,12 +261,20 @@ export default function ResultPage() {
       },
       interaction: { mode: "nearest", intersect: false },
       maintainAspectRatio: false,
+      // 點擊圖表：跳轉到對應幀
+      onClick: (evt: any, _els: any, chart: any) => {
+        const xScale = chart.scales.x;
+        const rect = chart.canvas.getBoundingClientRect();
+        const pixelX = evt.clientX - rect.left;
+        const frame = Math.round(xScale.getValueForPixel(pixelX));
+        seekToFrame(frame);
+      },
     };
 
     return { chartJsData: data, chartJsOptions: options };
-  }, [chartData, annotations]);
+  }, [chartData, annotations, showSeries]);
 
-  // ===== 同步紅線 plugin =====
+  /* ---------- 紅色同步線 plugin（放在 <Line plugins=[…] />） ---------- */
   const syncLinePlugin = {
     id: "syncLine",
     afterDatasetsDraw(chart: any) {
@@ -246,21 +294,32 @@ export default function ResultPage() {
     },
   };
 
-  // ===== 每 100 ms 同步影片位置 → currentFrame =====
+  /* ---------- 影片 ↔ 圖表 雙向同步 ---------- */
+  function seekToFrame(frame: number) {
+    if (!chartData || !videoRef.current) return;
+    const f = Math.max(0, Math.min(chartData.video.frame_count - 1, frame));
+    const t = f / (chartData.video.fps_used || 120);
+    videoRef.current.currentTime = t;
+    setCurrentFrame(f);
+  }
+
+  // 每 100ms 從影片回寫到 currentFrame（除非正在拖 slider）
   useEffect(() => {
     if (!chartData || !videoRef.current) return;
     const fps = chartData.video.fps_used || 120;
     const timer = setInterval(() => {
+      if (isScrubbing) return; // 使用者拖拉時暫停回寫，避免搶控制權
       const t = videoRef.current!.currentTime || 0;
       setCurrentFrame(Math.round(t * fps));
     }, 100);
     return () => clearInterval(timer);
-  }, [chartData]);
+  }, [chartData, isScrubbing]);
 
+  /* ---------- UI 共用 ---------- */
   const baseBtn =
     "w-full py-3 rounded-lg font-semibold text-white transition inline-flex items-center justify-center shadow-md text-lg";
 
-  // ======== Render ========
+  /* ====================== Render ====================== */
   return (
     <main className="min-h-screen flex flex-col items-center justify-center bg-zinc-50 dark:bg-black p-6 text-center text-zinc-800 dark:text-zinc-200">
       <div className="bg-white/10 dark:bg-zinc-900 p-8 rounded-2xl shadow-lg w-full max-w-3xl border border-zinc-700">
@@ -300,9 +359,48 @@ export default function ResultPage() {
                   />
                 )}
 
-                {/* 事件開關 */}
+                {/* 🧭 播放軸（與影片雙向同步） */}
                 {chartData && (
-                  <div className="flex gap-4 text-sm text-left mb-2">
+                  <div className="w-full text-left">
+                    <input
+                      type="range"
+                      min={0}
+                      max={chartData.video.frame_count - 1}
+                      value={currentFrame}
+                      onMouseDown={() => setIsScrubbing(true)}
+                      onTouchStart={() => setIsScrubbing(true)}
+                      onChange={(e) => seekToFrame(parseInt(e.target.value, 10))}
+                      onMouseUp={() => setIsScrubbing(false)}
+                      onTouchEnd={() => setIsScrubbing(false)}
+                      className="w-full"
+                    />
+                    <div className="text-xs text-zinc-400 mt-1">
+                      Frame: {currentFrame} / {chartData.video.frame_count - 1}
+                    </div>
+                  </div>
+                )}
+
+                {/* ✅ 曲線顯示開關 */}
+                {chartData && (
+                  <div className="flex flex-wrap gap-4 text-sm text-left">
+                    {chartData.series.map((s) => (
+                      <label key={s.id} className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={showSeries[s.id] !== false}
+                          onChange={() =>
+                            setShowSeries((prev) => ({ ...prev, [s.id]: !(prev[s.id] !== false) }))
+                          }
+                        />
+                        {s.label}
+                      </label>
+                    ))}
+                  </div>
+                )}
+
+                {/* ✅ 事件線開關 */}
+                {chartData && (
+                  <div className="flex flex-wrap gap-4 text-sm text-left">
                     <label className="flex items-center gap-2">
                       <input type="checkbox" checked={showIC} onChange={() => setShowIC(!showIC)} /> IC
                     </label>
@@ -318,16 +416,17 @@ export default function ResultPage() {
                   </div>
                 )}
 
-                {/* 📈 圖表 */}
+                {/* 📈 圖表（支援縮放/平移 + 點擊跳轉 + 同步紅線） */}
                 {chartData && chartJsData && chartJsOptions ? (
                   <div className="h-80 w-full bg-black/10 dark:bg-white/5 rounded-lg p-3 border border-zinc-700">
                     <Line
+                      ref={chartRef}
                       data={chartJsData as any}
                       options={chartJsOptions as any}
-                      plugins={[syncLinePlugin, annotationPlugin]}
+                      plugins={[annotationPlugin, zoomPlugin, { ...syncLinePlugin }]}
                     />
                     <p className="mt-2 text-xs text-zinc-400 text-left">
-                      曲線已做 Z-score 正規化（平均 0，±3σ）；紅虛線同步影片幀，勾選可開關事件線。
+                      手機：雙指捏合縮放、單指拖曳平移；桌機：Ctrl + 滾輪縮放、滑鼠拖曳平移。點擊圖表可跳轉影片；紅虛線為影片同步位置。
                     </p>
                   </div>
                 ) : (
