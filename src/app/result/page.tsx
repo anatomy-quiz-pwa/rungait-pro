@@ -2,7 +2,10 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { supabase } from "@/lib/supabaseClient";
+
+// ── Chart core（可 SSR 載入，不會觸發 window）
 import {
   Chart as ChartJS,
   LineElement,
@@ -12,22 +15,20 @@ import {
   Legend,
   Tooltip,
 } from "chart.js";
-import annotationPlugin from "chartjs-plugin-annotation";
-import zoomPlugin from "chartjs-plugin-zoom";
-import { Line } from "react-chartjs-2";
 
-ChartJS.register(
-  LineElement,
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  Legend,
-  Tooltip,
-  annotationPlugin,
-  zoomPlugin
-);
+// 注意：外掛改成「動態載入」（只在瀏覽器端），避免 Vercel 在建置期/SSR 讀到 window 而當掉
+let annotationPlugin: any = null;
+let zoomPlugin: any = null;
 
-/* ---------- 型別 ---------- */
+// React 封裝元件也改成動態載入以保險（僅 client）
+const Line = dynamic(() => import("react-chartjs-2").then((m) => m.Line), {
+  ssr: false,
+});
+
+// 先註冊核心（這個安全）
+ChartJS.register(LineElement, CategoryScale, LinearScale, PointElement, Legend, Tooltip);
+
+// ============ 型別 ============
 type FileEntry = { bucket: string; path: string };
 type ChartSeries = { id: string; label: string; unit: string; y: Array<number | null> };
 type ChartJSON = {
@@ -38,18 +39,23 @@ type ChartJSON = {
   style?: Record<string, string>;
 };
 
-/* ---------- 主頁 ---------- */
+// （可選）強制這頁不要做 SSG，避免 build 期預渲染：
+// export const dynamic = "force-dynamic";
+// export const revalidate = 0;
+
 export default function ResultPage() {
   const [email, setEmail] = useState("");
   const [job, setJob] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [chartData, setChartData] = useState<ChartJSON | null>(null);
 
-  // video & chart sync
+  const [chartData, setChartData] = useState<ChartJSON | null>(null);
+  const [pluginsReady, setPluginsReady] = useState(false); // 外掛載入完成
+
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const chartRef = useRef<any>(null);
+
   const [currentFrame, setCurrentFrame] = useState(0);
-  const [isScrubbing, setIsScrubbing] = useState(false); // slider拖曳時暫停回寫
+  const [isScrubbing, setIsScrubbing] = useState(false);
 
   // 事件線開關
   const [showIC, setShowIC] = useState(true);
@@ -57,10 +63,29 @@ export default function ResultPage() {
   const [showMs, setShowMs] = useState(true);
   const [showMw, setShowMw] = useState(true);
 
-  // 曲線可見性（動態依 series id）
+  // 曲線開關
   const [showSeries, setShowSeries] = useState<Record<string, boolean>>({});
 
-  /* ---------- 載入最新 job ---------- */
+  // ── 僅在瀏覽器端載入 Chart.js 外掛，並完成註冊
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const [{ default: anno }, { default: zoom }] = await Promise.all([
+        import("chartjs-plugin-annotation"),
+        import("chartjs-plugin-zoom"),
+      ]);
+      if (cancelled) return;
+      annotationPlugin = anno;
+      zoomPlugin = zoom;
+      ChartJS.register(annotationPlugin, zoomPlugin);
+      setPluginsReady(true);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // 讀網址參數並載入最新 job
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const emailParam = params.get("email");
@@ -108,7 +133,7 @@ export default function ResultPage() {
       if (error) throw error;
       const json: ChartJSON = JSON.parse(await data.text());
       setChartData(json);
-      // 初始化各曲線可見性（預設全開）
+      // 初始化曲線可見性
       const init: Record<string, boolean> = {};
       (json.series || []).forEach((s) => (init[s.id] = true));
       setShowSeries(init);
@@ -117,7 +142,7 @@ export default function ResultPage() {
     }
   }
 
-  /* ---------- 下載 ---------- */
+  // 下載
   async function handleDownload(bucket: string, path: string, filename: string) {
     try {
       const { data, error } = await supabase.storage.from(bucket).download(path);
@@ -135,7 +160,7 @@ export default function ResultPage() {
     }
   }
 
-  /* ---------- Z-score ---------- */
+  // Z-score
   function zNormalize(y: Array<number | null>) {
     const vals = y.filter((v): v is number => typeof v === "number" && Number.isFinite(v));
     const mean = vals.reduce((a, b) => a + b, 0) / (vals.length || 1);
@@ -144,7 +169,7 @@ export default function ResultPage() {
     return { mean, std, z: y.map((v) => (typeof v === "number" ? (v - mean) / std : null)) };
   }
 
-  /* ---------- 事件線 annotation ---------- */
+  // 事件線 annotations
   const annotations = useMemo(() => {
     if (!chartData) return {};
     const build = (arr: number[], color: string, label: string, show: boolean) =>
@@ -179,7 +204,7 @@ export default function ResultPage() {
     };
   }, [chartData, showIC, showTO, showMs, showMw]);
 
-  /* ---------- Chart.js data & options ---------- */
+  // Chart 資料與選項
   const { chartJsData, chartJsOptions } = useMemo(() => {
     if (!chartData) return { chartJsData: null, chartJsOptions: null };
 
@@ -207,7 +232,7 @@ export default function ResultPage() {
       spanGaps: true,
       yAxisID: "z",
       tension: 0.25,
-      hidden: showSeries[c.id] === false, // 依使用者勾選控制
+      hidden: showSeries[c.id] === false,
     }));
 
     const data = { labels, datasets };
@@ -216,7 +241,7 @@ export default function ResultPage() {
       responsive: true,
       animation: false,
       plugins: {
-        legend: { display: false }, // 我們自己做 checkbox
+        legend: { display: false }, // 用自訂 checkbox
         tooltip: {
           mode: "index",
           intersect: false,
@@ -232,21 +257,15 @@ export default function ResultPage() {
           },
         },
         annotation: { annotations },
-        // 🔍 縮放/平移（桌機：Ctrl+滾輪縮放、拖曳平移；手機：雙指捏合縮放、單指拖曳平移）
+        // 縮放 & 平移（手機雙指、桌機 Ctrl+滾輪；拖曳平移）
         zoom: {
           zoom: {
-            wheel: { enabled: true, modifierKey: "ctrl" }, // 避免誤觸滾輪
+            wheel: { enabled: true, modifierKey: "ctrl" },
             pinch: { enabled: true },
             mode: "x",
           },
-          pan: {
-            enabled: true,
-            mode: "x",
-            modifierKey: null, // 觸控 & 滑鼠拖曳都可平移
-          },
-          limits: {
-            x: { min: 0, max: chartData.video.frame_count - 1 },
-          },
+          pan: { enabled: true, mode: "x" },
+          limits: { x: { min: 0, max: chartData.video.frame_count - 1 } },
         },
       },
       scales: {
@@ -261,7 +280,7 @@ export default function ResultPage() {
       },
       interaction: { mode: "nearest", intersect: false },
       maintainAspectRatio: false,
-      // 點擊圖表：跳轉到對應幀
+      // 點擊圖 → 跳轉對應幀
       onClick: (evt: any, _els: any, chart: any) => {
         const xScale = chart.scales.x;
         const rect = chart.canvas.getBoundingClientRect();
@@ -274,7 +293,7 @@ export default function ResultPage() {
     return { chartJsData: data, chartJsOptions: options };
   }, [chartData, annotations, showSeries]);
 
-  /* ---------- 紅色同步線 plugin（放在 <Line plugins=[…] />） ---------- */
+  // 紅色同步線插件（交給 <Line plugins=[…]>）
   const syncLinePlugin = {
     id: "syncLine",
     afterDatasetsDraw(chart: any) {
@@ -294,7 +313,7 @@ export default function ResultPage() {
     },
   };
 
-  /* ---------- 影片 ↔ 圖表 雙向同步 ---------- */
+  // 影片 ↔ 圖表 雙向同步
   function seekToFrame(frame: number) {
     if (!chartData || !videoRef.current) return;
     const f = Math.max(0, Math.min(chartData.video.frame_count - 1, frame));
@@ -303,23 +322,22 @@ export default function ResultPage() {
     setCurrentFrame(f);
   }
 
-  // 每 100ms 從影片回寫到 currentFrame（除非正在拖 slider）
+  // 每 100ms 從影片回寫（除非正在拖 range）
   useEffect(() => {
     if (!chartData || !videoRef.current) return;
     const fps = chartData.video.fps_used || 120;
     const timer = setInterval(() => {
-      if (isScrubbing) return; // 使用者拖拉時暫停回寫，避免搶控制權
+      if (isScrubbing) return;
       const t = videoRef.current!.currentTime || 0;
       setCurrentFrame(Math.round(t * fps));
     }, 100);
     return () => clearInterval(timer);
   }, [chartData, isScrubbing]);
 
-  /* ---------- UI 共用 ---------- */
+  // UI 共用
   const baseBtn =
     "w-full py-3 rounded-lg font-semibold text-white transition inline-flex items-center justify-center shadow-md text-lg";
 
-  /* ====================== Render ====================== */
   return (
     <main className="min-h-screen flex flex-col items-center justify-center bg-zinc-50 dark:bg-black p-6 text-center text-zinc-800 dark:text-zinc-200">
       <div className="bg-white/10 dark:bg-zinc-900 p-8 rounded-2xl shadow-lg w-full max-w-3xl border border-zinc-700">
@@ -349,7 +367,7 @@ export default function ResultPage() {
 
             {job.status === "done" && job.result_json?.files ? (
               <div className="space-y-6">
-                {/* 🎞️ 影片 */}
+                {/* 影片 */}
                 {job.result_signed_url && (
                   <video
                     ref={videoRef}
@@ -359,7 +377,7 @@ export default function ResultPage() {
                   />
                 )}
 
-                {/* 🧭 播放軸（與影片雙向同步） */}
+                {/* 播放軸（雙向同步） */}
                 {chartData && (
                   <div className="w-full text-left">
                     <input
@@ -380,7 +398,7 @@ export default function ResultPage() {
                   </div>
                 )}
 
-                {/* ✅ 曲線顯示開關 */}
+                {/* 曲線開關 */}
                 {chartData && (
                   <div className="flex flex-wrap gap-4 text-sm text-left">
                     {chartData.series.map((s) => (
@@ -398,7 +416,7 @@ export default function ResultPage() {
                   </div>
                 )}
 
-                {/* ✅ 事件線開關 */}
+                {/* 事件線開關 */}
                 {chartData && (
                   <div className="flex flex-wrap gap-4 text-sm text-left">
                     <label className="flex items-center gap-2">
@@ -416,21 +434,37 @@ export default function ResultPage() {
                   </div>
                 )}
 
-                {/* 📈 圖表（支援縮放/平移 + 點擊跳轉 + 同步紅線） */}
-                {chartData && chartJsData && chartJsOptions ? (
+                {/* 圖表（縮放/平移 + 點擊跳轉 + 同步紅線） */}
+                {pluginsReady && chartData && chartJsData && chartJsOptions ? (
                   <div className="h-80 w-full bg-black/10 dark:bg-white/5 rounded-lg p-3 border border-zinc-700">
                     <Line
                       ref={chartRef}
                       data={chartJsData as any}
                       options={chartJsOptions as any}
-                      plugins={[annotationPlugin, zoomPlugin, { ...syncLinePlugin }]}
+                      plugins={[annotationPlugin, zoomPlugin, { ...{ id: "syncLine", afterDatasetsDraw(chart: any) {
+                        const { ctx, chartArea, scales } = chart;
+                        if (!ctx || !chartArea) return;
+                        const xScale = scales.x;
+                        const x = xScale.getPixelForValue(currentFrame);
+                        ctx.save();
+                        ctx.beginPath();
+                        ctx.moveTo(x, chartArea.top);
+                        ctx.lineTo(x, chartArea.bottom);
+                        ctx.setLineDash([6, 6]);
+                        ctx.lineWidth = 2;
+                        ctx.strokeStyle = "#ff4d4f";
+                        ctx.stroke();
+                        ctx.restore();
+                      } }}]}
                     />
                     <p className="mt-2 text-xs text-zinc-400 text-left">
-                      手機：雙指捏合縮放、單指拖曳平移；桌機：Ctrl + 滾輪縮放、滑鼠拖曳平移。點擊圖表可跳轉影片；紅虛線為影片同步位置。
+                      手機：雙指捏合縮放、拖曳平移；桌機：Ctrl+滾輪縮放、滑鼠拖曳平移。點擊圖表可跳轉影片；紅虛線為同步位置。
                     </p>
                   </div>
                 ) : (
-                  <p className="text-zinc-400">尚未取得圖表資料（chart.json）。</p>
+                  <p className="text-zinc-400">
+                    {pluginsReady ? "尚未取得圖表資料（chart.json）。" : "載入圖表外掛中…"}
+                  </p>
                 )}
 
                 {/* 下載 */}
