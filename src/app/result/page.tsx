@@ -149,6 +149,18 @@ export default function ResultPage() {
                       🖼️ 下載 分析圖表png檔
                     </button>
                   ))}
+                  {/* 📈 查看互動圖表 */}
+                  {Object.entries(job.result_json.files)
+                    .filter(([n]) => n.toLowerCase().endsWith(".json"))
+                    .map(([fileName, fileInfo]: [string, any]) => (
+                      <Link
+                        key={fileName}
+                        href={`/chart?bucket=${fileInfo.bucket}&path=${encodeURIComponent(fileInfo.path)}`}
+                        className={`${baseBtn} bg-purple-600 hover:bg-purple-700`}
+                      >
+                        📈 查看互動圖表
+                      </Link>
+                    ))}
               </div>
             ) : job.status === "failed" ? (
               <p className="text-red-400">❌ 分析失敗，請重新上傳影片。</p>
