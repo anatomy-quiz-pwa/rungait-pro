@@ -58,10 +58,24 @@ export default function UploadPage() {
         }),
       });
 
-      const resJson = await presignRes.json();
+      if (!presignRes.ok) {
+        const text = await presignRes.text().catch(() => "");
+        console.error("❌ /api/r2-presign HTTP 錯誤：", presignRes.status, text);
+        throw new Error(
+          `預簽失敗：status=${presignRes.status} body=${text || "(no body)"}`
+        );
+      }
+
+      const resJson = await presignRes.json().catch((e) => {
+        console.error("❌ /api/r2-presign JSON 解析失敗：", e);
+        throw new Error("預簽回應不是有效的 JSON");
+      });
+
       console.log("📦 /api/r2-presign 回傳：", resJson);
 
-      if (resJson.error) throw new Error(resJson.error);
+      if (resJson.error) {
+        throw new Error(resJson.error);
+      }
 
       const { uploadUrl, objectKey } = resJson;
 
@@ -77,7 +91,7 @@ export default function UploadPage() {
 
       console.log("📡 R2 回應狀態碼：", uploadRes.status);
       if (!uploadRes.ok) {
-        const text = await uploadRes.text();
+        const text = await uploadRes.text().catch(() => "");
         console.error("❌ R2 回傳錯誤內容：", text);
         throw new Error("R2 上傳失敗，狀態碼：" + uploadRes.status);
       }

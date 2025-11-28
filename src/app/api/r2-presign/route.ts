@@ -3,23 +3,20 @@ import { NextResponse } from "next/server";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
-// 先讀 raw 環境變數（不要先加 !，我們要檢查它是不是 undefined）
 const RAW_R2_ENDPOINT = process.env.R2_ENDPOINT;
 const RAW_R2_ACCESS_KEY_ID = process.env.R2_ACCESS_KEY_ID;
 const RAW_R2_SECRET_ACCESS_KEY = process.env.R2_SECRET_ACCESS_KEY;
 const R2_BUCKET_VIDEOS = process.env.R2_BUCKET_VIDEOS || "runpose-videos";
 
-// 🔍 在模組載入時就印一次環境變數狀態
+// 🔍 這行會出現在「Functions log」裡
 console.log("🟦 DEBUG R2 ENV:", {
   endpoint: RAW_R2_ENDPOINT,
   accessKeyId_present: !!RAW_R2_ACCESS_KEY_ID,
   secretKey_present: !!RAW_R2_SECRET_ACCESS_KEY,
 });
 
-// 如果少任何一個，直接在伺服器 log 提醒（也避免 AWS SDK 報那個看不懂的錯誤）
 if (!RAW_R2_ENDPOINT || !RAW_R2_ACCESS_KEY_ID || !RAW_R2_SECRET_ACCESS_KEY) {
   console.error("❌ R2 環境變數缺少，請檢查 Vercel 設定");
-  // 這裡不要 throw，讓 POST 回傳可讀的錯誤訊息
 }
 
 const s3 = new S3Client({
@@ -41,7 +38,6 @@ export async function POST(req: Request) {
       );
     }
 
-    // 如果環境變數缺少，直接回比較清楚的訊息
     if (!RAW_R2_ENDPOINT || !RAW_R2_ACCESS_KEY_ID || !RAW_R2_SECRET_ACCESS_KEY) {
       return NextResponse.json(
         { error: "伺服器 R2 環境變數未設定完整，請聯絡管理者" },
@@ -55,7 +51,6 @@ export async function POST(req: Request) {
     const command = new PutObjectCommand({
       Bucket: R2_BUCKET_VIDEOS,
       Key: key,
-      // ContentType 由前端 PUT 時帶 file.type 即可
     });
 
     const uploadUrl = await getSignedUrl(s3, command, { expiresIn: 3600 });
