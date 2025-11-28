@@ -18,27 +18,26 @@ export default function UploadPage() {
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
-  // 🔍 預覽起點
+  // 預覽剪輯起點
   const previewTrim = () => {
     if (!videoRef.current || startTime === null) return;
     videoRef.current.currentTime = startTime;
     videoRef.current.play().catch(() => {});
   };
 
-  // 🔍 選檔：建立本機 blob URL
+  // 選擇檔案：建立本機預覽
   const handleSelectFile = (f: File | null) => {
-    console.log("📁 handleSelectFile 被呼叫，檔案：", f);
+    console.log("📁 選擇檔案：", f);
     setFile(f);
     if (f) {
       const url = URL.createObjectURL(f);
-      console.log("🎬 建立本機預覽 URL：", url);
+      console.log("🎬 本機預覽 URL：", url);
       setVideoUrl(url);
     } else {
       setVideoUrl(null);
     }
   };
 
-  // 🔼 上傳處理
   const handleUpload = async () => {
     if (!email) return setMessage("請輸入 Email");
     if (!file) return setMessage("請選擇影片");
@@ -49,12 +48,10 @@ export default function UploadPage() {
     setMessage("準備上傳…");
 
     try {
-      console.log("🚀 送出 /api/r2-presign 請求");
+      // 1) 向後端要 PUT 預簽 URL
       const presignRes = await fetch("/api/r2-presign", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json", // 建議帶上
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           fileName: file.name,
           email,
@@ -66,20 +63,16 @@ export default function UploadPage() {
 
       if (resJson.error) throw new Error(resJson.error);
 
-      const { uploadUrl, fields } = resJson;
-      const objectKey = fields.key;
+      const { uploadUrl, objectKey } = resJson;
 
-      // 組 POST formData
-      const formData = new FormData();
-      Object.entries(fields).forEach(([k, v]) =>
-        formData.append(k, v as string)
-      );
-      formData.append("file", file);
-
-      console.log("⬆️ 開始上傳到 R2：", uploadUrl);
+      // 2) 直接 PUT 檔案到 R2
+      setMessage("上傳到 R2 中…");
       const uploadRes = await fetch(uploadUrl, {
-        method: "POST",
-        body: formData,
+        method: "PUT",
+        body: file,
+        headers: {
+          "Content-Type": file.type || "application/octet-stream",
+        },
       });
 
       console.log("📡 R2 回應狀態碼：", uploadRes.status);
@@ -89,8 +82,7 @@ export default function UploadPage() {
         throw new Error("R2 上傳失敗，狀態碼：" + uploadRes.status);
       }
 
-      // 建 job
-      console.log("🧾 建立 jobs 記錄");
+      // 3) 建立 jobs 記錄
       const { data, error } = await supabase
         .from("jobs")
         .insert({
@@ -116,104 +108,138 @@ export default function UploadPage() {
   };
 
   return (
-    <main className="p-4 max-w-lg mx-auto space-y-4">
-      <h1 className="text-xl font-bold">影片上傳並設定剪輯</h1>
+    <main className="min-h-screen bg-zinc-50 dark:bg-black flex items-center justify-center p-6">
+      <div className="w-full max-w-lg bg-white/10 dark:bg-zinc-900 border border-zinc-700 rounded-2xl p-6 space-y-4 shadow-lg">
+        <h1 className="text-2xl font-bold text-center mb-2">上傳影片並設定剪輯</h1>
 
-      <input
-        type="email"
-        placeholder="Email"
-        className="w-full border p-2"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-      />
-
-      <input
-        type="file"
-        accept="video/*"
-        onChange={(e) => handleSelectFile(e.target.files?.[0] ?? null)}
-      />
-
-      {videoUrl && (
-        <>
-          <video
-            key={videoUrl} // 👈 確保檔案更換時強制重新掛載
-            ref={videoRef}
-            src={videoUrl}
-            controls
-            className="w-full rounded"
-            onLoadedMetadata={() => {
-              console.log(
-                "🎞️ 影片 metadata 載入完成，duration =",
-                videoRef.current?.duration
-              );
-            }}
-            onError={(e) => {
-              console.error("❌ 影片無法播放，可能瀏覽器不支援編碼", e);
-            }}
+        {/* Email */}
+        <div className="space-y-1">
+          <label className="text-sm text-zinc-400">Email</label>
+          <input
+            type="email"
+            placeholder="輸入 Email"
+            className="w-full border border-zinc-600 bg-zinc-950/60 text-white p-2 rounded-md"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
           />
-          <div className="flex gap-2 mt-2">
-            <button
-              onClick={() => {
-                if (!videoRef.current) return;
-                const t = videoRef.current.currentTime;
-                console.log("⏱ 設為起點：", t);
-                setStartTime(t);
-              }}
-              className="px-3 py-2 bg-blue-600 text-white rounded"
-            >
-              設為起點
-            </button>
+        </div>
 
-            <button
-              onClick={() => {
-                if (!videoRef.current) return;
-                const t = videoRef.current.currentTime;
-                console.log("⏱ 設為終點：", t);
-                setEndTime(t);
-              }}
-              className="px-3 py-2 bg-blue-600 text-white rounded"
-            >
-              設為終點
-            </button>
-
-            <button
-              onClick={previewTrim}
-              className="px-3 py-2 bg-zinc-700 text-white rounded"
-            >
-              預覽起點
-            </button>
+        {/* 檔案選擇：大顆按鈕 + 顯示檔名 */}
+        <div className="space-y-2">
+          <label className="text-sm text-zinc-400">選擇影片檔案</label>
+          <div className="flex items-center gap-3">
+            <label className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-md cursor-pointer shadow">
+              選擇影片…
+              <input
+                type="file"
+                accept="video/*"
+                className="hidden"
+                onChange={(e) => handleSelectFile(e.target.files?.[0] ?? null)}
+              />
+            </label>
+            <span className="text-xs text-zinc-400 break-all">
+              {file ? file.name : "尚未選擇檔案"}
+            </span>
           </div>
+        </div>
 
-          <p className="text-sm text-zinc-500">
-            起點：{startTime?.toFixed(2)} 秒　終點：
-            {endTime?.toFixed(2)} 秒
+        {/* 預覽區 */}
+        {videoUrl && (
+          <div className="space-y-2">
+            <video
+              key={videoUrl}
+              ref={videoRef}
+              src={videoUrl}
+              controls
+              className="w-full rounded-md border border-zinc-700"
+              onLoadedMetadata={() => {
+                console.log(
+                  "🎞️ 影片 metadata 載入完成，duration =",
+                  videoRef.current?.duration
+                );
+              }}
+              onError={(e) => {
+                console.error("❌ 影片無法播放，可能瀏覽器不支援這個編碼", e);
+              }}
+            />
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => {
+                  if (!videoRef.current) return;
+                  const t = videoRef.current.currentTime;
+                  console.log("⏱ 設為起點：", t);
+                  setStartTime(t);
+                }}
+                className="px-3 py-2 bg-emerald-600 text-white text-sm rounded"
+              >
+                設為起點
+              </button>
+
+              <button
+                onClick={() => {
+                  if (!videoRef.current) return;
+                  const t = videoRef.current.currentTime;
+                  console.log("⏱ 設為終點：", t);
+                  setEndTime(t);
+                }}
+                className="px-3 py-2 bg-emerald-600 text-white text-sm rounded"
+              >
+                設為終點
+              </button>
+
+              <button
+                onClick={previewTrim}
+                className="px-3 py-2 bg-zinc-700 text-white text-sm rounded"
+              >
+                從起點預覽
+              </button>
+            </div>
+
+            <p className="text-xs text-zinc-400">
+              起點：{startTime?.toFixed(2) ?? "--"} 秒　/　終點：
+              {endTime?.toFixed(2) ?? "--"} 秒
+            </p>
+          </div>
+        )}
+
+        {/* FPS */}
+        <div className="space-y-1">
+          <label className="text-sm text-zinc-400">影片 FPS（預設 120）</label>
+          <input
+            type="number"
+            min={1}
+            max={240}
+            value={videoFPS}
+            onChange={(e) => setVideoFPS(Number(e.target.value) || 0)}
+            className="w-full border border-zinc-600 bg-zinc-950/60 text-white p-2 rounded-md"
+          />
+        </div>
+
+        {/* 送出按鈕 */}
+        <button
+          onClick={handleUpload}
+          disabled={uploading}
+          className={`w-full p-3 rounded-md font-semibold text-white mt-2 ${
+            uploading
+              ? "bg-zinc-600 cursor-not-allowed"
+              : "bg-green-600 hover:bg-green-700"
+          }`}
+        >
+          {uploading ? "上傳中…" : "送出任務"}
+        </button>
+
+        {message && (
+          <p className="text-sm text-red-400 whitespace-pre-wrap mt-1">
+            {message}
           </p>
-        </>
-      )}
+        )}
 
-      <input
-        type="number"
-        min={1}
-        max={240}
-        value={videoFPS}
-        onChange={(e) => setVideoFPS(Number(e.target.value))}
-        className="w-full border p-2"
-        placeholder="影片 FPS"
-      />
-
-      <button
-        onClick={handleUpload}
-        disabled={uploading}
-        className="w-full p-3 bg-green-600 text-white rounded"
-      >
-        {uploading ? "上傳中…" : "送出任務"}
-      </button>
-
-      <p className="text-sm text-red-500 whitespace-pre-wrap">{message}</p>
-
-      <Link href="/result" className="text-sm text-blue-500">
-        查看最近一筆結果（測試）
-      </Link>
+        <div className="mt-3 text-right">
+          <Link href="/result" className="text-xs text-zinc-400 hover:text-blue-400">
+            測試用：直接看結果頁
+          </Link>
+        </div>
+      </div>
     </main>
   );
 }

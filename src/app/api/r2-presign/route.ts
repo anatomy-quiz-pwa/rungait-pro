@@ -1,73 +1,49 @@
-import { NextRequest, NextResponse } from "next/server";
-import crypto from "crypto";
+// src/app/api/r2-presign/route.ts
+import { NextResponse } from "next/server";
+import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
-// 從後端環境變數讀取（安全）
+const R2_ENDPOINT = process.env.R2_ENDPOINT!;           // 例： https://a8904....r2.cloudflarestorage.com
 const R2_ACCESS_KEY_ID = process.env.R2_ACCESS_KEY_ID!;
 const R2_SECRET_ACCESS_KEY = process.env.R2_SECRET_ACCESS_KEY!;
-const R2_BUCKET = process.env.R2_BUCKET!;
-const R2_PUBLIC_DOMAIN = process.env.R2_PUBLIC_DOMAIN!;
-// R2 endpoint (S3 相容)
-const R2_ENDPOINT = process.env.R2_ENDPOINT!; 
-// 例如: https://<account_id>.r2.cloudflarestorage.com
+const R2_BUCKET_VIDEOS = process.env.R2_BUCKET_VIDEOS || "runpose-videos";
 
-export async function POST(req: NextRequest) {
+// 建一個 S3 client 指向 Cloudflare R2
+const s3 = new S3Client({
+  region: "auto",
+  endpoint: R2_ENDPOINT,
+  credentials: {
+    accessKeyId: R2_ACCESS_KEY_ID,
+    secretAccessKey: R2_SECRET_ACCESS_KEY,
+  },
+});
+
+export async function POST(req: Request) {
   try {
     const { fileName, email } = await req.json();
-    if (!fileName || !email)
+    if (!fileName || !email) {
       return NextResponse.json({ error: "缺少 fileName 或 email" }, { status: 400 });
+    }
 
-    // 實際 R2 存放路徑
-    const objectKey = `${email}/${Date.now()}_${fileName}`;
+    // 建議的物件 key： userEmail/時間戳_檔名
+    const safeEmail = encodeURIComponent(email);
+    const key = `${safeEmail}/${Date.now()}_${fileName}`;
 
-    // Pre-signed URL 期限（秒）
-    const expiresIn = 300;
+    const command = new PutObjectCommand({
+      Bucket: R2_BUCKET_VIDEOS,
+      Key: key,
+      // 這裡可以不指定 ContentType，前端用 file.type 傳過來即可
+    });
 
-    // ===== 產生 S3 相容簽名（v4） =====
-    const isoDate = new Date().toISOString().replace(/[:-]|\.\d{3}/g, "");
-    const shortDate = isoDate.slice(0, 8);
+    // 產生 1 小時有效的預簽 URL
+    const uploadUrl = await getSignedUrl(s3, command, { expiresIn: 3600 });
 
-    const credential = `${R2_ACCESS_KEY_ID}/${shortDate}/auto/s3/aws4_request`;
-
-    const policy = {
-      expiration: new Date(Date.now() + expiresIn * 1000).toISOString(),
-      conditions: [
-        { bucket: R2_BUCKET },
-        ["starts-with", "$key", objectKey],
-        { "x-amz-algorithm": "AWS4-HMAC-SHA256" },
-        { "x-amz-credential": credential },
-        { "x-amz-date": isoDate },
-      ],
-    };
-
-    const policyBase64 = Buffer.from(JSON.stringify(policy)).toString("base64");
-
-    // 簽名
-    const sign = (key: any, msg: any) =>
-      crypto.createHmac("sha256", key).update(msg).digest();
-
-    const dateKey = sign("AWS4" + R2_SECRET_ACCESS_KEY, shortDate);
-    const regionKey = sign(dateKey, "auto");
-    const serviceKey = sign(regionKey, "s3");
-    const signingKey = sign(serviceKey, "aws4_request");
-    const signature = crypto
-      .createHmac("sha256", signingKey)
-      .update(policyBase64)
-      .digest("hex");
-
-    // 回傳前端可用的 form data
     return NextResponse.json({
-      uploadUrl: `${R2_ENDPOINT}/${R2_BUCKET}`,
-      fields: {
-        key: objectKey,
-        "x-amz-algorithm": "AWS4-HMAC-SHA256",
-        "x-amz-credential": credential,
-        "x-amz-date": isoDate,
-        policy: policyBase64,
-        "x-amz-signature": signature,
-      },
-      publicUrl: `${R2_PUBLIC_DOMAIN}/${objectKey}`,
+      uploadUrl,   // 前端用這個 URL 做 PUT
+      objectKey: key, // 存到 jobs.original_video_r2
     });
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    console.error("❌ /api/r2-presign 錯誤：", err);
+    return NextResponse.json({ error: "預簽失敗：" + err.message }, { status: 500 });
   }
 }
