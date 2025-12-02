@@ -99,7 +99,11 @@ export default function ResultPage() {
     if (data) {
       setJob(data);
       if (data.result_json_r2 && base) {
-        const res = await fetch(`${base}/${data.result_json_r2}`);
+        const encoded = encodeURI(data.result_json_r2);
+        const url = `${base}/${encoded}`;
+        console.log("Fetching chart JSON:", url);
+
+        const res = await fetch(url);
         const json = await res.json();
         setChartJson(json);
       }
