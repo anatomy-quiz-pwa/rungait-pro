@@ -29,6 +29,11 @@ export default function UploadPage() {
   const handleSelectFile = (f: File | null) => {
     console.log("📁 選擇檔案：", f);
     setFile(f);
+
+    // ✅ 換影片時先重置起訖時間
+    setStartTime(null);
+    setEndTime(null);
+
     if (f) {
       const url = URL.createObjectURL(f);
       console.log("🎬 本機預覽 URL：", url);
@@ -41,8 +46,20 @@ export default function UploadPage() {
   const handleUpload = async () => {
     if (!email) return setMessage("請輸入 Email");
     if (!file) return setMessage("請選擇影片");
-    if (startTime === null || endTime === null)
-      return setMessage("請設定剪輯時間");
+
+    // ✅ 如果使用者沒有手動按「設為起點/終點」，但 metadata 有載入，
+    //    我們嘗試自動補上 0 ~ duration
+    if ((startTime === null || endTime === null) && videoRef.current) {
+      const duration = videoRef.current.duration;
+      if (isFinite(duration) && duration > 0) {
+        if (startTime === null) setStartTime(0);
+        if (endTime === null) setEndTime(duration);
+      }
+    }
+
+    if (startTime === null || endTime === null) {
+      return setMessage("請設定剪輯時間（或等影片載入完成再重試）");
+    }
 
     setUploading(true);
     setMessage("準備上傳…");
@@ -138,7 +155,7 @@ export default function UploadPage() {
           />
         </div>
 
-        {/* 檔案選擇：大顆按鈕 + 顯示檔名 */}
+        {/* 檔案選擇 */}
         <div className="space-y-2">
           <label className="text-sm text-zinc-400">選擇影片檔案</label>
           <div className="flex items-center gap-3">
@@ -167,10 +184,14 @@ export default function UploadPage() {
               controls
               className="w-full rounded-md border border-zinc-700"
               onLoadedMetadata={() => {
-                console.log(
-                  "🎞️ 影片 metadata 載入完成，duration =",
-                  videoRef.current?.duration
-                );
+                const dur = videoRef.current?.duration ?? 0;
+                console.log("🎞️ 影片 metadata 載入完成，duration =", dur);
+
+                // ✅ 自動把起訖時間預設為 0 ~ duration
+                if (isFinite(dur) && dur > 0) {
+                  setStartTime(0);
+                  setEndTime(dur);
+                }
               }}
               onError={(e) => {
                 console.error("❌ 影片無法播放，可能瀏覽器不支援這個編碼", e);
@@ -210,8 +231,8 @@ export default function UploadPage() {
             </div>
 
             <p className="text-xs text-zinc-400">
-              起點：{startTime?.toFixed(2) ?? "--"} 秒　/　終點：
-              {endTime?.toFixed(2) ?? "--"} 秒
+              起點：{startTime !== null ? startTime.toFixed(2) : "--"} 秒　/　終點：
+              {endTime !== null ? endTime.toFixed(2) : "--"} 秒
             </p>
           </div>
         )}
