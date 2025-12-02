@@ -15,10 +15,12 @@ import {
   Tooltip,
 } from "chart.js";
 
+ChartJS.register(LineElement, CategoryScale, LinearScale, PointElement, Legend, Tooltip);
+
 let annotationPlugin: any = null;
 let zoomPlugin: any = null;
 
-const Line = dynamic(() => import("react-chartjs-2").then(m => m.Line), {
+const Line = dynamic(() => import("react-chartjs-2").then((m) => m.Line), {
   ssr: false,
 });
 
@@ -65,10 +67,11 @@ type ChartJSON = {
 };
 
 export default function ResultPage() {
-  const base = process.env.NEXT_PUBLIC_R2_PUBLIC_RESULTS!;
+  const base = process.env.NEXT_PUBLIC_R2_PUBLIC_RESULTS || "";
   const [job, setJob] = useState<JobRow | null>(null);
   const [chartJson, setChartJson] = useState<ChartJSON | null>(null);
   const [loading, setLoading] = useState(true);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const chartRef = useRef<any>(null);
@@ -79,36 +82,87 @@ export default function ResultPage() {
 
   const PAD = 120;
 
+  function buildR2Url(path: string) {
+    const cleanBase = base.replace(/\/+$/, "");
+    let cleanPath = path.replace(/^\/+/, "");
+    // 若 path 不小心包含 runpose-results/，這邊砍掉，避免多一層
+    if (cleanPath.startsWith("runpose-results/")) {
+      cleanPath = cleanPath.slice("runpose-results/".length);
+    }
+    // encodeURI 不會處理 @，再補一刀
+    const encodedPath = encodeURI(cleanPath).replace(/@/g, "%40");
+    return `${cleanBase}/${encodedPath}`;
+  }
+
   // --- Load job + chart.json ---
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const jobId = params.get("jobId");
-    if (!jobId) return;
+    console.log("Result page jobId =", jobId);
+    console.log("R2 base =", base);
+
+    if (!jobId) {
+      setErrorMsg("網址內沒有 jobId 參數。");
+      setLoading(false);
+      return;
+    }
 
     loadJob(jobId);
     subscribeJob(jobId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function loadJob(jobId: string) {
-    const { data } = await supabase
-      .from("jobs")
-      .select("*")
-      .eq("id", jobId)
-      .maybeSingle();
+    try {
+      const { data, error } = await supabase
+        .from("jobs")
+        .select("*")
+        .eq("id", jobId)
+        .maybeSingle();
 
-    if (data) {
+      if (error) {
+        console.error("❌ Supabase 讀取 job 失敗：", error);
+        setErrorMsg("讀取任務資料失敗。");
+        return;
+      }
+
+      if (!data) {
+        setErrorMsg("找不到這個任務。");
+        return;
+      }
+
+      console.log("🔎 job row =", data);
       setJob(data);
-      if (data.result_json_r2 && base) {
-        const encoded = encodeURI(data.result_json_r2);
-        const url = `${base}/${encoded}`;
+
+      if (!base) {
+        console.warn("⚠️ NEXT_PUBLIC_R2_PUBLIC_RESULTS 未設定，無法載入檔案");
+        setErrorMsg("R2 base URL 未設定。");
+        return;
+      }
+
+      if (data.result_json_r2) {
+        const url = buildR2Url(data.result_json_r2);
         console.log("Fetching chart JSON:", url);
 
         const res = await fetch(url);
-        const json = await res.json();
+        if (!res.ok) {
+          console.error("❌ 取得 chart.json 失敗：", res.status, url);
+          setErrorMsg(`載入圖表資料失敗（HTTP ${res.status}）。`);
+          return;
+        }
+
+        const json = (await res.json()) as ChartJSON;
+        console.log("✅ chart.json loaded.");
         setChartJson(json);
+      } else {
+        console.warn("⚠️ 這個 job 沒有 result_json_r2");
       }
+    } catch (e: any) {
+      console.error("❌ loadJob 發生錯誤：", e);
+      setErrorMsg(`載入資料時發生錯誤：${e.message ?? e}`);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }
 
   // =====⭐ Realtime：分析完成立刻刷新=====
@@ -151,7 +205,6 @@ export default function ResultPage() {
     if (!chartJson) return { data: null, options: null };
 
     const N = chartJson.video.frame_count;
-
     const labels = Array.from({ length: N + PAD * 2 }, (_, i) => i);
 
     const datasets = chartJson.series.map((s) => ({
@@ -165,7 +218,6 @@ export default function ResultPage() {
       yAxisID: "y",
     }));
 
-    // ----- event lines -----
     const events = chartJson.events;
     const colors = chartJson.style?.events || {};
 
@@ -285,13 +337,17 @@ export default function ResultPage() {
 
       <p>使用者：{job.user_email}</p>
 
+      {errorMsg && (
+        <p className="text-sm text-red-400 whitespace-pre-wrap">{errorMsg}</p>
+      )}
+
       {/* Video */}
-      {job.result_video_r2 && (
+      {job.result_video_r2 && base && (
         <video
           ref={videoRef}
           controls
           className="w-full rounded border"
-          src={`${base}/${job.result_video_r2}`}
+          src={buildR2Url(job.result_video_r2)}
         />
       )}
 
@@ -311,18 +367,18 @@ export default function ResultPage() {
 
       {/* Downloads */}
       <div className="flex gap-4 flex-wrap">
-        {job.result_png_r2 && (
+        {job.result_png_r2 && base && (
           <a
-            href={`${base}/${job.result_png_r2}`}
+            href={buildR2Url(job.result_png_r2)}
             download
             className="px-4 py-2 bg-blue-600 text-white rounded"
           >
             下載 PNG
           </a>
         )}
-        {job.result_xlsx_r2 && (
+        {job.result_xlsx_r2 && base && (
           <a
-            href={`${base}/${job.result_xlsx_r2}`}
+            href={buildR2Url(job.result_xlsx_r2)}
             download
             className="px-4 py-2 bg-green-600 text-white rounded"
           >
