@@ -82,14 +82,13 @@ export default function ResultPage() {
 
   const PAD = 120;
 
+  // R2 靜態檔案（影片 / PNG / Excel）用的 URL builder
   function buildR2Url(path: string) {
     const cleanBase = base.replace(/\/+$/, "");
     let cleanPath = path.replace(/^\/+/, "");
-    // 若 path 不小心包含 runpose-results/，這邊砍掉，避免多一層
     if (cleanPath.startsWith("runpose-results/")) {
       cleanPath = cleanPath.slice("runpose-results/".length);
     }
-    // encodeURI 不會處理 @，再補一刀
     const encodedPath = encodeURI(cleanPath).replace(/@/g, "%40");
     return `${cleanBase}/${encodedPath}`;
   }
@@ -134,19 +133,14 @@ export default function ResultPage() {
       console.log("🔎 job row =", data);
       setJob(data);
 
-      if (!base) {
-        console.warn("⚠️ NEXT_PUBLIC_R2_PUBLIC_RESULTS 未設定，無法載入檔案");
-        setErrorMsg("R2 base URL 未設定。");
-        return;
-      }
-
       if (data.result_json_r2) {
-        const url = buildR2Url(data.result_json_r2);
-        console.log("Fetching chart JSON:", url);
+        const pathParam = encodeURIComponent(data.result_json_r2);
+        const apiUrl = `/api/chart-json?path=${pathParam}`;
+        console.log("Fetching chart JSON via API:", apiUrl);
 
-        const res = await fetch(url);
+        const res = await fetch(apiUrl);
         if (!res.ok) {
-          console.error("❌ 取得 chart.json 失敗：", res.status, url);
+          console.error("❌ chart-json API 回傳錯誤：", res.status);
           setErrorMsg(`載入圖表資料失敗（HTTP ${res.status}）。`);
           return;
         }
@@ -343,12 +337,15 @@ export default function ResultPage() {
 
       {/* Video */}
       {job.result_video_r2 && base && (
-        <video
-          ref={videoRef}
-          controls
-          className="w-full rounded border"
-          src={buildR2Url(job.result_video_r2)}
-        />
+        <>
+          {console.log("🎬 Video URL:", buildR2Url(job.result_video_r2))}
+          <video
+            ref={videoRef}
+            controls
+            className="w-full rounded border"
+            src={buildR2Url(job.result_video_r2)}
+          />
+        </>
       )}
 
       {/* Chart */}
