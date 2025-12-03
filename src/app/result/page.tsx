@@ -17,9 +17,6 @@ import {
 
 ChartJS.register(LineElement, CategoryScale, LinearScale, PointElement, Legend, Tooltip);
 
-let annotationPlugin: any = null;
-let zoomPlugin: any = null;
-
 const Line = dynamic(() => import("react-chartjs-2").then((m) => m.Line), {
   ssr: false,
 });
@@ -252,8 +249,8 @@ export default function ResultPage() {
         animation: false,
         plugins: {
           legend: { display: false },
+          // 這裡的 annotation/zoom 設定，沒有對應 plugin 時 Chart.js 會自動忽略，不會再掛掉
           annotation: { annotations: ann } as any,
-          tooltip: { mode: "index", intersect: false },
           zoom: {
             zoom: {
               wheel: { enabled: true, modifierKey: "ctrl" },
@@ -284,7 +281,9 @@ export default function ResultPage() {
         onClick: (evt: any, _els: any, chart: any) => {
           const xScale = chart.scales.x;
           const rect = chart.canvas.getBoundingClientRect();
-          const idx = Math.round(xScale.getValueForPixel(evt.clientX - rect.left));
+          const idx = Math.round(
+            xScale.getValueForPixel(evt.clientX - rect.left)
+          );
           seekToFrame(idx - PAD);
         },
       } as any,
@@ -351,12 +350,7 @@ export default function ResultPage() {
       {/* Chart */}
       {chartData && chartOptions ? (
         <div className="w-full h-80">
-          <Line
-            ref={chartRef}
-            data={chartData}
-            options={chartOptions}
-            plugins={[annotationPlugin, zoomPlugin]}
-          />
+          <Line ref={chartRef} data={chartData} options={chartOptions} />
         </div>
       ) : (
         <p>尚未取得圖表資料...</p>
