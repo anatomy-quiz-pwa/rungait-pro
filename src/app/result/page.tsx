@@ -191,6 +191,37 @@ export default function ResultPage() {
     return () => video.removeEventListener("loadedmetadata", onMeta);
   }, [chartJson]);
 
+  // ===== 跳時間 =====
+  function seekToFrame(frame: number) {
+    if (!videoRef.current || !chartJson) return;
+
+    // 防止 NaN / Infinity
+    if (!Number.isFinite(frame)) {
+      console.warn("seekToFrame 收到非數值 frame：", frame);
+      return;
+    }
+
+    const N = chartJson.video.frame_count;
+    const f = Math.max(0, Math.min(N - 1, frame));
+
+    if (!Number.isFinite(f)) {
+      console.warn("seekToFrame 計算後 f 非數值：", f);
+      return;
+    }
+
+    const sec = secPerFrameRef.current;
+    if (sec && Number.isFinite(sec)) {
+      const t = f * sec;
+      if (Number.isFinite(t)) {
+        videoRef.current.currentTime = t;
+      } else {
+        console.warn("currentTime 被給到非數值 t：", t);
+      }
+    }
+
+    setCurrentFrame(f);
+  }
+
   // ===== ChartJS data + options =====
   const { data: chartData, options: chartOptions } = useMemo(() => {
     if (!chartJson) return { data: null, options: null };
@@ -249,7 +280,7 @@ export default function ResultPage() {
         animation: false,
         plugins: {
           legend: { display: false },
-          // 這裡的 annotation/zoom 設定，沒有對應 plugin 時 Chart.js 會自動忽略，不會再掛掉
+          // 沒有對應 plugin 也沒關係，Chart.js 會忽略
           annotation: { annotations: ann } as any,
           zoom: {
             zoom: {
@@ -281,35 +312,38 @@ export default function ResultPage() {
         onClick: (evt: any, _els: any, chart: any) => {
           const xScale = chart.scales.x;
           const rect = chart.canvas.getBoundingClientRect();
-          const idx = Math.round(
-            xScale.getValueForPixel(evt.clientX - rect.left)
-          );
-          seekToFrame(idx - PAD);
+          const pixelX = evt.clientX - rect.left;
+          const v = xScale.getValueForPixel(pixelX);
+
+          if (!Number.isFinite(v)) {
+            // 點在圖外、scale 範圍外就直接忽略
+            return;
+          }
+
+          const idx = Math.round(v);
+          const frameIdx = idx - PAD;
+
+          if (frameIdx < 0 || frameIdx >= N) {
+            // 超出有效 frame 範圍就不處理
+            return;
+          }
+
+          seekToFrame(frameIdx);
         },
       } as any,
     };
   }, [chartJson]);
-
-  // ===== 跳時間 =====
-  function seekToFrame(frame: number) {
-    if (!videoRef.current || !chartJson) return;
-    const N = chartJson.video.frame_count;
-    const f = Math.max(0, Math.min(N - 1, frame));
-
-    const sec = secPerFrameRef.current;
-    if (sec) videoRef.current.currentTime = f * sec;
-
-    setCurrentFrame(f);
-  }
 
   // ===== 影片 → Chart pointer =====
   useEffect(() => {
     if (!chartJson || !videoRef.current) return;
     const timer = setInterval(() => {
       const sec = videoRef.current!.currentTime;
-      const f = secPerFrameRef.current
-        ? Math.round(sec / secPerFrameRef.current)
-        : 0;
+      const secPerFrame = secPerFrameRef.current;
+      const f =
+        secPerFrame && Number.isFinite(secPerFrame)
+          ? Math.round(sec / secPerFrame)
+          : 0;
       setCurrentFrame(f);
     }, 80);
     return () => clearInterval(timer);
