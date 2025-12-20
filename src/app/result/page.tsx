@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { supabase } from "@/lib/supabaseClient";
+import { useRouter } from "next/navigation";
 
 import {
   Chart as ChartJS,
@@ -92,6 +93,14 @@ export default function ResultPage() {
   // 讓中央指針能指到最左/最右幀
   const PAD_FRAMES = 120;
 
+  const router = useRouter();
+
+  // ✅ 新增：登入檢查 gate
+  const [checkingAuth, setCheckingAuth] = useState(true);
+
+  // ✅ 新增：記錄登入者（可用來 debug / 顯示，不一定要用）
+  const [viewerEmail, setViewerEmail] = useState<string | null>(null);
+
   // ===== 動態載入 annotation / zoom 外掛 =====
   useEffect(() => {
     let cancelled = false;
@@ -129,21 +138,38 @@ export default function ResultPage() {
     return `${cleanBase}/${encodedPath}`;
   }
 
-  // ===== 初始化：讀取 jobId, 讀 job & chart.json, 訂閱 realtime =====
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const jobId = params.get("jobId");
-    console.log("Result page jobId =", jobId);
-    console.log("R2 base =", base);
+    let unsub: (() => void) | null = null;
 
-    if (!jobId) {
-      setErrorMsg("網址內沒有 jobId 參數。");
-      setLoading(false);
-      return;
-    }
+    (async () => {
+      // ✅ 先檢查登入
+      const { data, error } = await supabase.auth.getUser();
+      if (error || !data.user) {
+        router.replace("/login");
+        return;
+      }
+      setViewerEmail(data.user.email ?? null);
+      setCheckingAuth(false);
 
-    loadJob(jobId);
-    subscribeJob(jobId);
+      // ✅ 再讀 jobId
+      const params = new URLSearchParams(window.location.search);
+      const jobId = params.get("jobId");
+      console.log("Result page jobId =", jobId);
+      console.log("R2 base =", base);
+
+      if (!jobId) {
+        setErrorMsg("網址內沒有 jobId 參數。");
+        setLoading(false);
+        return;
+      }
+
+      await loadJob(jobId);
+      unsub = subscribeJob(jobId);
+    })();
+
+    return () => {
+      if (unsub) unsub();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -162,7 +188,7 @@ export default function ResultPage() {
       }
 
       if (!data) {
-        setErrorMsg("找不到這個任務。");
+        setErrorMsg("找不到這個任務，或你沒有權限查看。");
         return;
       }
 
@@ -200,7 +226,7 @@ export default function ResultPage() {
   }
 
   function subscribeJob(jobId: string) {
-    supabase
+    const channel = supabase
       .channel(`job-${jobId}`)
       .on(
         "postgres_changes",
@@ -212,6 +238,11 @@ export default function ResultPage() {
         }
       )
       .subscribe();
+
+    // ✅ 回傳解除訂閱，避免多次進出頁面造成 channel 疊加
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }
 
   // ===== 影片 loadedmetadata → 計算 secPerFrame（用 duration / frame_count） =====
@@ -543,6 +574,15 @@ export default function ResultPage() {
 
   const baseBtn =
     "w-full py-3 rounded-lg font-semibold text-white transition inline-flex items-center justify-center shadow-md text-lg";
+
+
+  if (checkingAuth) {
+    return (
+      <main className="p-6 text-center">
+        <p>檢查登入狀態中…</p>
+      </main>
+    );
+  }
 
   // ===== UI =====
   if (loading || !job) {
