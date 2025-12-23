@@ -140,6 +140,8 @@ export default function ResultPage() {
 
   useEffect(() => {
     let unsub: (() => void) | null = null;
+    let poll: ReturnType<typeof setInterval> | null = null;
+    let cancelled = false;
 
     (async () => {
       // ✅ 先檢查登入
@@ -148,14 +150,14 @@ export default function ResultPage() {
         router.replace("/login");
         return;
       }
+      if (cancelled) return;
+
       setViewerEmail(data.user.email ?? null);
       setCheckingAuth(false);
 
       // ✅ 再讀 jobId
       const params = new URLSearchParams(window.location.search);
       const jobId = params.get("jobId");
-      console.log("Result page jobId =", jobId);
-      console.log("R2 base =", base);
 
       if (!jobId) {
         setErrorMsg("網址內沒有 jobId 參數。");
@@ -163,12 +165,23 @@ export default function ResultPage() {
         return;
       }
 
+      // ✅ 先載入一次
       await loadJob(jobId);
+      if (cancelled) return;
+
+      // ✅ Realtime（可有可無）
       unsub = subscribeJob(jobId);
+
+      // ✅ Polling fallback（保證會更新畫面）
+      poll = setInterval(() => {
+        loadJob(jobId);
+      }, 2000);
     })();
 
     return () => {
+      cancelled = true;
       if (unsub) unsub();
+      if (poll) clearInterval(poll);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

@@ -1,85 +1,212 @@
 // src/app/login/page.tsx
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
-import Link from "next/link";
 
 export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState("suntest@test.com");
-  const [password, setPassword] = useState("");
-  const [msg, setMsg] = useState("");
-  const [loading, setLoading] = useState(false);
+  const sp = useSearchParams();
 
-  const handleLogin = async () => {
-    setMsg("");
-    setLoading(true);
+  const initialMode = (sp.get("mode") === "signup" ? "signup" : "signin") as
+    | "signin"
+    | "signup";
+  const [mode, setMode] = useState<"signin" | "signup">(initialMode);
+
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+
+  const origin = useMemo(() => {
+    // client side 下安全取得
+    if (typeof window === "undefined") return "";
+    return window.location.origin;
+  }, []);
+
+  const emailRedirectTo = useMemo(() => {
+    // 註冊信點下去後，導到 callback，再去 onboarding
+    return `${origin}/auth/callback?next=/onboarding`;
+  }, [origin]);
+
+  useEffect(() => {
+    // 如果已登入就直接走 onboarding 或回首頁
+    (async () => {
+      const { data } = await supabase.auth.getSession();
+      if (data.session) router.replace("/");
+    })();
+  }, [router]);
+
+  async function onSignInEmail() {
+    setBusy(true);
+    setMsg(null);
 
     const { error } = await supabase.auth.signInWithPassword({
-      email,
+      email: email.trim(),
       password,
     });
 
+    if (error) setMsg(`登入失敗：${error.message}`);
+    else router.replace("/");
+
+    setBusy(false);
+  }
+
+  async function onSignUpEmail() {
+    setBusy(true);
+    setMsg(null);
+
+    const { data, error } = await supabase.auth.signUp({
+      email: email.trim(),
+      password,
+      options: {
+        emailRedirectTo, // 關鍵：讓 Confirm email 回到你的站
+      },
+    });
+
     if (error) {
-      setLoading(false);
-      setMsg("登入失敗：" + error.message);
+      setMsg(`註冊失敗：${error.message}`);
+      setBusy(false);
       return;
     }
 
-    // 登入成功 → 前往 upload
-    router.push("/upload");
-  };
+    // Confirm email 開啟時，通常 session 為 null，需要去信箱點確認
+    if (!data.session) {
+      setMsg("註冊成功！請到信箱點擊驗證連結完成註冊。驗證後會自動導回網站建立基本資料。");
+    } else {
+      // 若未開 Confirm email，會直接有 session（你目前是開啟，所以多半不會走到這）
+      router.replace("/onboarding");
+    }
+
+    setBusy(false);
+  }
+
+  async function onGoogle() {
+    setBusy(true);
+    setMsg(null);
+
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: `${origin}/auth/callback?next=/onboarding`,
+      },
+    });
+
+    if (error) {
+      setMsg(`Google 登入失敗：${error.message}`);
+      setBusy(false);
+    }
+    // 成功會跳轉離開此頁，不需 setBusy(false)
+  }
 
   return (
-    <main className="min-h-screen bg-zinc-50 dark:bg-black flex items-center justify-center p-6">
-      <div className="w-full max-w-md bg-white/10 dark:bg-zinc-900 border border-zinc-700 rounded-2xl p-6 space-y-4 shadow-lg">
-        <h1 className="text-2xl font-bold text-center">登入後才能上傳</h1>
-
-        <div className="space-y-1">
-          <label className="text-sm text-zinc-400">Email</label>
-          <input
-            type="email"
-            className="w-full border border-zinc-600 bg-zinc-950/60 text-white p-2 rounded-md"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="請輸入 email"
-          />
+    <div className="min-h-screen bg-[#0b0f14] text-white flex items-center justify-center px-6">
+      <div className="w-full max-w-md rounded-2xl border border-white/10 bg-white/5 p-6">
+        <div className="text-2xl font-semibold">
+          {mode === "signin" ? "Login" : "Sign up"}
         </div>
 
-        <div className="space-y-1">
-          <label className="text-sm text-zinc-400">Password</label>
-          <input
-            type="password"
-            className="w-full border border-zinc-600 bg-zinc-950/60 text-white p-2 rounded-md"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="請輸入密碼"
-          />
+        <div className="mt-2 text-sm text-white/70">
+          {mode === "signin"
+            ? "使用 Email + Password 登入，或使用 Google 一鍵登入。"
+            : "建立帳號後需要 Email 驗證，驗證完成會引導你填寫基本資料。"}
         </div>
 
-        <button
-          onClick={handleLogin}
-          disabled={loading}
-          className={`w-full p-3 rounded-md font-semibold text-white ${
-            loading
-              ? "bg-zinc-600 cursor-not-allowed"
-              : "bg-blue-600 hover:bg-blue-700"
-          }`}
-        >
-          {loading ? "登入中…" : "登入"}
-        </button>
+        <div className="mt-6 space-y-4">
+          <button
+            disabled={busy}
+            onClick={onGoogle}
+            className="w-full rounded-xl border border-white/15 bg-black/20 px-4 py-2.5 text-sm hover:bg-white/10 disabled:opacity-60"
+          >
+            Continue with Google
+          </button>
 
-        {msg && <p className="text-sm text-red-400 whitespace-pre-wrap">{msg}</p>}
+          <div className="flex items-center gap-3 text-white/40">
+            <div className="h-px flex-1 bg-white/10" />
+            <div className="text-xs">OR</div>
+            <div className="h-px flex-1 bg-white/10" />
+          </div>
 
-        <div className="text-xs text-zinc-400">
-          <p>目前採白名單帳號制：你必須先被管理者建立帳號並開通上傳權限。</p>
-          <Link href="/" className="underline hover:text-blue-400">
-            回首頁
-          </Link>
+          <div>
+            <label className="text-sm text-white/70">Email</label>
+            <input
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              type="email"
+              className="mt-1 w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm outline-none focus:border-white/30"
+              placeholder="you@example.com"
+            />
+          </div>
+
+          <div>
+            <label className="text-sm text-white/70">Password</label>
+            <input
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              type="password"
+              className="mt-1 w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm outline-none focus:border-white/30"
+              placeholder="Password"
+            />
+            <div className="mt-1 text-xs text-white/50">
+              不特別限制複雜度，但建議至少 8 碼。
+            </div>
+          </div>
+
+          {msg && (
+            <div className="rounded-lg border border-white/10 bg-black/30 p-3 text-sm text-white/80">
+              {msg}
+            </div>
+          )}
+
+          {mode === "signin" ? (
+            <button
+              disabled={busy}
+              onClick={onSignInEmail}
+              className="w-full rounded-xl bg-[#0ea5e9] px-4 py-2.5 font-medium text-black hover:opacity-90 disabled:opacity-60"
+            >
+              {busy ? "Signing in..." : "Login"}
+            </button>
+          ) : (
+            <button
+              disabled={busy}
+              onClick={onSignUpEmail}
+              className="w-full rounded-xl bg-[#0ea5e9] px-4 py-2.5 font-medium text-black hover:opacity-90 disabled:opacity-60"
+            >
+              {busy ? "Signing up..." : "Create account"}
+            </button>
+          )}
+
+          <div className="mt-2 text-sm text-white/70">
+            {mode === "signin" ? (
+              <button
+                className="underline hover:text-white"
+                onClick={() => {
+                  setMsg(null);
+                  setMode("signup");
+                }}
+              >
+                沒有帳號？Sign up
+              </button>
+            ) : (
+              <button
+                className="underline hover:text-white"
+                onClick={() => {
+                  setMsg(null);
+                  setMode("signin");
+                }}
+              >
+                已有帳號？Login
+              </button>
+            )}
+          </div>
+
+          <div className="text-xs text-white/40">
+            註：若你用同一個 Gmail 信箱「先 Email 註冊、後 Google 登入」，Supabase 通常會自動把身份連結到同一個帳號。
+          </div>
         </div>
       </div>
-    </main>
+    </div>
   );
 }
