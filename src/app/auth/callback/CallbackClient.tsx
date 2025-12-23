@@ -14,11 +14,13 @@ export default function CallbackClient() {
     let cancelled = false;
 
     async function run() {
-      const next = sp.get("next") || "/onboarding";
+      // 預設 onboarding
+      const nextDefault = "/onboarding";
+      const nextFromUrl = sp.get("next");
+      const fallbackNext = nextFromUrl || nextDefault;
 
-      // 這一步 Supabase 會自動處理 URL token → session
+      // 1️⃣ 取得 session（Supabase 會處理 URL token）
       const { data, error } = await supabase.auth.getSession();
-
       if (cancelled) return;
 
       if (error) {
@@ -26,21 +28,40 @@ export default function CallbackClient() {
         return;
       }
 
-      if (data.session) {
-        router.replace(next);
+      if (!data.session) {
+        // token 交換有時略慢，等一下再試
+        setMsg("即將完成，請稍候...");
+        setTimeout(run, 600);
         return;
       }
 
-      // 有時 token 交換略慢，再試一次
-      setMsg("即將完成，請稍候...");
-      setTimeout(async () => {
-        const { data: d2 } = await supabase.auth.getSession();
-        if (!cancelled) {
-          if (d2.session) router.replace(next);
-          else
-            setMsg("尚未建立登入狀態，請回到 Login 再試一次。");
-        }
-      }, 600);
+      const user = data.session.user;
+
+      // 2️⃣ 查 user_access 判斷是否已完成 onboarding
+      const { data: ua, error: e2 } = await supabase
+        .from("user_access")
+        .select("display_name")
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      if (cancelled) return;
+
+      if (e2) {
+        setMsg(`讀取使用者資料失敗：${e2.message}`);
+        return;
+      }
+
+      const hasOnboarded =
+        !!ua?.display_name && ua.display_name.trim().length > 0;
+
+      // 3️⃣ 導向決策
+      if (hasOnboarded) {
+        // 已完成 onboarding → 正常登入
+        router.replace(nextFromUrl || "/");
+      } else {
+        // 第一次登入 → 去填資料
+        router.replace("/onboarding");
+      }
     }
 
     run();
