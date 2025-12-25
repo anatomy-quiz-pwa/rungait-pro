@@ -1,3 +1,5 @@
+'use client'
+
 export type CompressionPreset = "fast720" | "small540" | "cutOnly"
 
 export interface TrimOptions {
@@ -13,6 +15,10 @@ export interface TrimOptions {
  * Prioritizes MP4/H.264 for Safari/iOS compatibility
  */
 export async function trimVideo(file: File, options: TrimOptions): Promise<Blob | null> {
+  if (typeof window === 'undefined' || typeof document === 'undefined') {
+    throw new Error('trimVideo can only be called in browser environment')
+  }
+
   const { startSec, endSec, preset, onProgress } = options
   const duration = endSec - startSec
 

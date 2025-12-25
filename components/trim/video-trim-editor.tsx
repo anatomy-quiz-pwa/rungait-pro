@@ -62,6 +62,7 @@ export function VideoTrimEditor() {
     const url = URL.createObjectURL(selectedFile)
     setVideoUrl(url)
 
+    if (typeof document === 'undefined') return
     const video = document.createElement("video")
     video.src = url
     video.preload = "metadata"

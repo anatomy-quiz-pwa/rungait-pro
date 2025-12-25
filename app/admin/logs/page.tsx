@@ -25,6 +25,8 @@ export default function AdminLogsPage() {
       .map((row) => row.join(","))
       .join("\n")
 
+    if (typeof document === 'undefined') return
+    
     const blob = new Blob([csv], { type: "text/csv" })
     const url = URL.createObjectURL(blob)
     const a = document.createElement("a")

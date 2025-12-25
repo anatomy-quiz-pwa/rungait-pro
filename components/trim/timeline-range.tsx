@@ -60,12 +60,14 @@ export function TimelineRange({ duration, startSec, endSec, onChange, className 
       setDragging(null)
     }
 
-    document.addEventListener("mousemove", handleMouseMove)
-    document.addEventListener("mouseup", handleMouseUp)
+    if (typeof document !== 'undefined') {
+      document.addEventListener("mousemove", handleMouseMove)
+      document.addEventListener("mouseup", handleMouseUp)
 
-    return () => {
-      document.removeEventListener("mousemove", handleMouseMove)
-      document.removeEventListener("mouseup", handleMouseUp)
+      return () => {
+        document.removeEventListener("mousemove", handleMouseMove)
+        document.removeEventListener("mouseup", handleMouseUp)
+      }
     }
   }, [dragging, startSec, endSec, duration, onChange, dragOffset])
 
