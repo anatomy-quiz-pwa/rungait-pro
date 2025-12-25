@@ -5,6 +5,15 @@ import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 
+type UA = { display_name: string | null; phone: string | null };
+
+function isProfileComplete(ua: UA | null) {
+  // 你想要「只要姓名就算完成」也可以，把 phone 條件拿掉即可
+  const dn = (ua?.display_name ?? "").trim();
+  const ph = (ua?.phone ?? "").trim();
+  return dn.length > 0 && ph.length > 0;
+}
+
 export default function CallbackClient() {
   const router = useRouter();
   const sp = useSearchParams();
@@ -13,13 +22,8 @@ export default function CallbackClient() {
   useEffect(() => {
     let cancelled = false;
 
-    async function run() {
-      // 預設 onboarding
-      const nextDefault = "/onboarding";
-      const nextFromUrl = sp.get("next");
-      const fallbackNext = nextFromUrl || nextDefault;
-
-      // 1️⃣ 取得 session（Supabase 會處理 URL token）
+    async function finalize() {
+      // 1) 取得 session（Supabase 在這步會處理 URL token）
       const { data, error } = await supabase.auth.getSession();
       if (cancelled) return;
 
@@ -28,43 +32,52 @@ export default function CallbackClient() {
         return;
       }
 
-      if (!data.session) {
-        // token 交換有時略慢，等一下再試
-        setMsg("即將完成，請稍候...");
-        setTimeout(run, 600);
+      const session = data.session;
+      if (!session) {
+        setMsg("尚未建立登入狀態，請回到 Login 再試一次。");
         return;
       }
 
-      const user = data.session.user;
+      // 2) 取得 user（保險）
+      const { data: u } = await supabase.auth.getUser();
+      const user = u.user;
+      if (!user) {
+        setMsg("讀取使用者資訊失敗，請回到 Login 再試一次。");
+        return;
+      }
 
-      // 2️⃣ 查 user_access 判斷是否已完成 onboarding
+      // 3) 查 user_access 判斷是否已完成基本資料
+      setMsg("正在載入會員資料...");
       const { data: ua, error: e2 } = await supabase
         .from("user_access")
-        .select("display_name")
+        .select("display_name, phone")
         .eq("user_id", user.id)
-        .maybeSingle();
+        .maybeSingle<UA>();
 
       if (cancelled) return;
 
       if (e2) {
-        setMsg(`讀取使用者資料失敗：${e2.message}`);
+        // 如果這裡出錯，通常是 RLS/trigger 沒建好
+        setMsg(`讀取會員資料失敗：${e2.message}`);
         return;
       }
 
-      const hasOnboarded =
-        !!ua?.display_name && ua.display_name.trim().length > 0;
+      // 4) 決定導向
+      const next = sp.get("next"); // 若你未來想保留「原本想去的頁面」可用
+      const completed = isProfileComplete(ua ?? null);
 
-      // 3️⃣ 導向決策
-      if (hasOnboarded) {
-        // 已完成 onboarding → 正常登入
-        router.replace(nextFromUrl || "/");
-      } else {
-        // 第一次登入 → 去填資料
+      // 規則：
+      // - 若資料不完整：一定去 onboarding
+      // - 若資料完整：去 next（若有）否則回首頁
+      if (!completed) {
         router.replace("/onboarding");
+        return;
       }
+
+      router.replace(next && next.startsWith("/") ? next : "/");
     }
 
-    run();
+    finalize();
     return () => {
       cancelled = true;
     };

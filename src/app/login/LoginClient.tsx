@@ -26,7 +26,7 @@ export default function LoginClient() {
   }, []);
 
   const emailRedirectTo = useMemo(() => {
-    return `${origin}/auth/callback?next=/onboarding`;
+    return `${origin}/auth/callback`;
   }, [origin]);
 
   useEffect(() => {
@@ -85,7 +85,7 @@ export default function LoginClient() {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${origin}/auth/callback?next=/onboarding`,
+        redirectTo: `${origin}/auth/callback`,
       },
     });
 
