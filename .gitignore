@@ -1,0 +1,12 @@
+.vercel
+.next
+node_modules
+
+# Environment variables
+.env.local
+.env*.local
+
+# Build outputs
+dist
+build
+*.log

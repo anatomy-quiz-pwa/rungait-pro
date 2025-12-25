@@ -1,0 +1,214 @@
+'use client'
+
+import { GoogleMap, Marker, InfoWindow, useLoadScript } from '@react-google-maps/api'
+import { useState, useMemo, useEffect } from 'react'
+
+type Location = {
+  id: string
+  name: string
+  lat: number
+  lng: number
+  description?: string
+  contact_info?: string
+  contact_url?: string
+  has_analysis?: boolean
+  address?: string
+  city?: string
+}
+
+const containerStyle = { width: '100%', height: '100%' }
+const defaultCenter = { lat: 25.033, lng: 121.565 }
+
+export default function RunGaitMap() {
+  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
+  const { isLoaded, loadError } = useLoadScript({
+    googleMapsApiKey: apiKey || '',
+  })
+
+  const [locations, setLocations] = useState<Location[]>([])
+  const [selected, setSelected] = useState<Location | null>(null)
+
+  useEffect(() => {
+    fetch('/api/locations')
+      .then(r => r.json())
+      .then(result => {
+        if (result.success && result.data) {
+          setLocations(result.data)
+        } else {
+          console.error('Failed to load locations:', result.error)
+          setLocations([])
+        }
+      })
+      .catch((error) => {
+        console.error('Error fetching locations:', error)
+        setLocations([])
+      })
+  }, [])
+
+  // 計算地圖中心點（如果有 locations，使用第一個；否則使用預設）
+  const center = useMemo(() => {
+    return locations.length > 0 
+      ? { lat: locations[0].lat, lng: locations[0].lng }
+      : defaultCenter
+  }, [locations])
+
+  // 建立自訂 marker icon
+  const markerIcon = useMemo(() => {
+    if (typeof window === 'undefined' || !window.google) {
+      return undefined
+    }
+    return {
+      url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(`
+        <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="16" cy="16" r="12" fill="#06b6d4" stroke="#ffffff" stroke-width="2"/>
+          <circle cx="16" cy="16" r="6" fill="#ffffff"/>
+        </svg>
+      `),
+      scaledSize: new window.google.maps.Size(32, 32),
+    }
+  }, [])
+
+  // 深色主題地圖樣式
+  const mapStyles = useMemo(() => [
+    {
+      featureType: 'all',
+      elementType: 'labels.text.fill',
+      stylers: [{ color: '#9ca3af' }],
+    },
+    {
+      featureType: 'all',
+      elementType: 'labels.text.stroke',
+      stylers: [{ color: '#1f2937' }],
+    },
+    {
+      featureType: 'water',
+      elementType: 'geometry',
+      stylers: [{ color: '#0f172a' }],
+    },
+    {
+      featureType: 'landscape',
+      elementType: 'geometry',
+      stylers: [{ color: '#111827' }],
+    },
+    {
+      featureType: 'road',
+      elementType: 'geometry',
+      stylers: [{ color: '#1f2937' }],
+    },
+    {
+      featureType: 'poi',
+      elementType: 'geometry',
+      stylers: [{ color: '#111827' }],
+    },
+  ], [])
+
+  if (!apiKey) {
+    return (
+      <div className="flex items-center justify-center h-full bg-[#0B0F12]">
+        <div className="text-center text-slate-400 p-8">
+          <p className="text-lg font-semibold mb-2">❌ Google Maps API Key 未設定</p>
+          <p className="text-sm">請在環境變數中設定 NEXT_PUBLIC_GOOGLE_MAPS_API_KEY</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (loadError) {
+    return (
+      <div className="flex items-center justify-center h-full bg-[#0B0F12]">
+        <div className="text-center text-slate-400 p-8">
+          <p className="text-lg font-semibold mb-2">❌ Google Maps 載入失敗</p>
+          <p className="text-sm">請檢查 API Key 是否正確，或網路連線是否正常</p>
+          {loadError.message && (
+            <p className="text-xs mt-2 text-slate-500">{loadError.message}</p>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  if (!isLoaded) {
+    return (
+      <div className="flex items-center justify-center h-full bg-[#0B0F12]">
+        <div className="text-center text-slate-400">
+          <p>Loading map...</p>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <GoogleMap 
+      mapContainerStyle={containerStyle} 
+      center={center} 
+      zoom={locations.length > 0 ? 13 : 12}
+      options={{
+        styles: mapStyles,
+        fullscreenControl: true,
+        mapTypeControl: false,
+        streetViewControl: false,
+      }}
+    >
+      {locations.map(loc => (
+        <Marker
+          key={loc.id}
+          position={{ lat: Number(loc.lat), lng: Number(loc.lng) }}
+          onClick={() => setSelected(loc)}
+          icon={markerIcon}
+        />
+      ))}
+
+      {selected && (
+        <InfoWindow
+          position={{ lat: Number(selected.lat), lng: Number(selected.lng) }}
+          onCloseClick={() => setSelected(null)}
+        >
+          <div style={{ maxWidth: 280, color: '#1f2937', padding: '4px' }}>
+            {/* Name */}
+            <div style={{ fontWeight: 700, fontSize: '16px', marginBottom: '8px', color: '#111827' }}>
+              {selected.name}
+            </div>
+            
+            {/* Description */}
+            {selected.description && (
+              <div style={{ fontSize: '14px', marginBottom: '8px', color: '#374151', lineHeight: '1.5' }}>
+                {selected.description}
+              </div>
+            )}
+            
+            {/* Has Analysis */}
+            {selected.has_analysis && (
+              <div style={{ fontSize: '14px', marginBottom: '8px', color: '#10b981', fontWeight: 500 }}>
+                🎥 已有跑姿分析案例
+              </div>
+            )}
+            
+            {/* Contact URL */}
+            {(selected.contact_url || selected.contact_info) && (
+              <a 
+                href={
+                  selected.contact_url 
+                    ? (selected.contact_url.startsWith('http') ? selected.contact_url : `https://${selected.contact_url}`)
+                    : (selected.contact_info?.startsWith('http') ? selected.contact_info : `https://${selected.contact_info}`)
+                }
+                target="_blank" 
+                rel="noreferrer" 
+                style={{ 
+                  display: 'block', 
+                  marginTop: '8px',
+                  color: '#06b6d4',
+                  textDecoration: 'underline',
+                  fontSize: '14px',
+                  fontWeight: 500
+                }}
+              >
+                🔗 聯絡 / 官網
+              </a>
+            )}
+          </div>
+        </InfoWindow>
+      )}
+    </GoogleMap>
+  )
+}
+
