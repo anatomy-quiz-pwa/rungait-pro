@@ -23,7 +23,22 @@ export default function RunGaitMap() {
   // 讀取環境變數（必須是 NEXT_PUBLIC_ 前綴才能在 client component 中使用）
   // 在 Next.js 中，NEXT_PUBLIC_ 環境變數會在 build 時被內嵌到 client bundle
   // 注意：環境變數必須在 Vercel Environment Variables 中設定，且選擇 Production 環境
-  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || ''
+  // 如果環境變數在 build 時不存在，它會是 undefined，需要重新部署
+  const apiKey = typeof window !== 'undefined' 
+    ? (process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || '')
+    : ''
+  
+  // Debug: 在 client 端檢查 API key
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const key = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
+      console.log('[RunGaitMap] API Key check:', {
+        exists: !!key,
+        length: key?.length || 0,
+        prefix: key?.substring(0, 10) || 'N/A'
+      })
+    }
+  }, [])
   
   // 只有在有 API key 時才載入 Google Maps
   const { isLoaded, loadError } = useLoadScript({
@@ -108,13 +123,6 @@ export default function RunGaitMap() {
     },
   ], [])
 
-  // Debug: 在開發環境顯示 API key 狀態（僅前幾個字元）
-  useEffect(() => {
-    if (process.env.NODE_ENV === 'development') {
-      console.log('[RunGaitMap] API Key status:', apiKey ? `${apiKey.substring(0, 10)}...` : 'NOT SET')
-    }
-  }, [apiKey])
-
   // 若缺少 API key，顯示清單模式提示
   if (!apiKey || apiKey.trim() === '') {
     return (
@@ -123,7 +131,7 @@ export default function RunGaitMap() {
           <p className="text-lg font-semibold mb-2">⚠️ 地圖功能需要 Google Maps API key</p>
           <p className="text-sm mb-4">目前顯示清單模式</p>
           <p className="text-xs text-slate-500 mb-2">
-            請在 Vercel Environment Variables 中設定：
+            請在 Vercel Dashboard → Settings → Environment Variables 中設定：
           </p>
           <p className="text-xs text-cyan-400 font-mono mb-2">
             NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
@@ -131,11 +139,14 @@ export default function RunGaitMap() {
           <p className="text-xs text-slate-500 mb-2">
             值：AIzaSyA8ZJkjc18cCppnTCrrtu0105jBewHt1dU
           </p>
+          <p className="text-xs text-red-400 mb-2 font-semibold">
+            ⚠️ 重要：必須選擇 "Production" 環境（或 "All Environments"）
+          </p>
           <p className="text-xs text-slate-500 mt-4">
-            設定後請重新部署（Redeploy）
+            設定後請在 Vercel Dashboard 手動觸發 "Redeploy"
           </p>
           <p className="text-xs text-amber-400 mt-2">
-            注意：環境變數必須在 Production 環境中設定
+            注意：環境變數變更後必須重新部署才會生效
           </p>
         </div>
       </div>
