@@ -21,19 +21,14 @@ const defaultCenter = { lat: 25.033, lng: 121.565 }
 
 export default function RunGaitMap() {
   // 讀取環境變數（必須是 NEXT_PUBLIC_ 前綴才能在 client component 中使用）
-  // 使用 useState 確保只在 client 端讀取
-  const [apiKey, setApiKey] = useState<string>('')
-  
-  useEffect(() => {
-    // 只在 client 端讀取環境變數
-    if (typeof window !== 'undefined') {
-      setApiKey(process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || '')
-    }
-  }, [])
+  // 在 Next.js 中，NEXT_PUBLIC_ 環境變數會在 build 時被內嵌到 client bundle
+  const apiKey = typeof window !== 'undefined' 
+    ? (process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || '')
+    : ''
   
   const { isLoaded, loadError } = useLoadScript({
     googleMapsApiKey: apiKey || '',
-    // 只有在有 API key 時才載入
+    // 只有在有 API key 時才載入 Google Maps
     ...(apiKey ? {} : { libraries: [] }),
   })
 
