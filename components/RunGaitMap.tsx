@@ -21,10 +21,20 @@ const defaultCenter = { lat: 25.033, lng: 121.565 }
 
 export default function RunGaitMap() {
   // 讀取環境變數（必須是 NEXT_PUBLIC_ 前綴才能在 client component 中使用）
-  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || ''
+  // 使用 useState 確保只在 client 端讀取
+  const [apiKey, setApiKey] = useState<string>('')
+  
+  useEffect(() => {
+    // 只在 client 端讀取環境變數
+    if (typeof window !== 'undefined') {
+      setApiKey(process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || '')
+    }
+  }, [])
   
   const { isLoaded, loadError } = useLoadScript({
-    googleMapsApiKey: apiKey,
+    googleMapsApiKey: apiKey || '',
+    // 只有在有 API key 時才載入
+    ...(apiKey ? {} : { libraries: [] }),
   })
 
   const [locations, setLocations] = useState<Location[]>([])
@@ -111,8 +121,14 @@ export default function RunGaitMap() {
         <div className="text-center text-slate-400 p-8 max-w-md">
           <p className="text-lg font-semibold mb-2">⚠️ 地圖功能需要 Google Maps API key</p>
           <p className="text-sm mb-4">目前顯示清單模式</p>
-          <p className="text-xs text-slate-500">
-            請在環境變數中設定 NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
+          <p className="text-xs text-slate-500 mb-2">
+            請在 Vercel Environment Variables 中設定：
+          </p>
+          <p className="text-xs text-cyan-400 font-mono">
+            NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
+          </p>
+          <p className="text-xs text-slate-500 mt-4">
+            設定後請重新部署
           </p>
         </div>
       </div>
