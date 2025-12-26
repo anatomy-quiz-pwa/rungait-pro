@@ -32,7 +32,8 @@ export async function listLocations({
   }
 
   if (city) {
-    locations = locations.filter((loc) => loc.city?.toLowerCase().includes(city.toLowerCase()))
+    const cityLower = city.toLowerCase()
+    locations = locations.filter((loc) => loc.city?.toLowerCase().includes(cityLower))
   }
 
   if (q) {
