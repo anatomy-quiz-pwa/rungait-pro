@@ -20,9 +20,11 @@ const containerStyle = { width: '100%', height: '100%' }
 const defaultCenter = { lat: 25.033, lng: 121.565 }
 
 export default function RunGaitMap() {
-  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
+  // 讀取環境變數（必須是 NEXT_PUBLIC_ 前綴才能在 client component 中使用）
+  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || ''
+  
   const { isLoaded, loadError } = useLoadScript({
-    googleMapsApiKey: apiKey || '',
+    googleMapsApiKey: apiKey,
   })
 
   const [locations, setLocations] = useState<Location[]>([])
@@ -102,12 +104,16 @@ export default function RunGaitMap() {
     },
   ], [])
 
-  if (!apiKey) {
+  // 若缺少 API key，顯示清單模式提示
+  if (!apiKey || apiKey.trim() === '') {
     return (
       <div className="flex items-center justify-center h-full bg-[#0B0F12]">
-        <div className="text-center text-slate-400 p-8">
-          <p className="text-lg font-semibold mb-2">❌ Google Maps API Key 未設定</p>
-          <p className="text-sm">請在環境變數中設定 NEXT_PUBLIC_GOOGLE_MAPS_API_KEY</p>
+        <div className="text-center text-slate-400 p-8 max-w-md">
+          <p className="text-lg font-semibold mb-2">⚠️ 地圖功能需要 Google Maps API key</p>
+          <p className="text-sm mb-4">目前顯示清單模式</p>
+          <p className="text-xs text-slate-500">
+            請在環境變數中設定 NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
+          </p>
         </div>
       </div>
     )

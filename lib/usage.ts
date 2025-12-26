@@ -1,3 +1,5 @@
+'use client'
+
 import { readLS } from "@/lib/storage"
 
 interface CreditsData {
@@ -18,6 +20,11 @@ interface AnalysisRow {
 }
 
 export async function fetchCredits(): Promise<CreditsData> {
+  // 確保只在瀏覽器環境執行
+  if (typeof window === 'undefined') {
+    return { points: 0, used: 0, quota: 0, extra: 0, plan: "free" }
+  }
+  
   // Simulated backend that reads from localStorage
   // Can be replaced with real Supabase queries when ready
   const savedUser = readLS("auth_user")
@@ -45,6 +52,11 @@ export async function fetchCredits(): Promise<CreditsData> {
 }
 
 export async function listMyAnalyses(): Promise<AnalysisRow[]> {
+  // 確保只在瀏覽器環境執行
+  if (typeof window === 'undefined') {
+    return []
+  }
+  
   // Simulated backend - replace with real Supabase query
   const savedUser = readLS("auth_user")
   if (!savedUser) return []

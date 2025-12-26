@@ -1,3 +1,5 @@
+'use client'
+
 import { readLS, writeLS } from "@/lib/storage"
 
 export interface CreditsInfo {
@@ -6,6 +8,11 @@ export interface CreditsInfo {
 }
 
 export async function fetchCredits(): Promise<CreditsInfo> {
+  // 確保只在瀏覽器環境執行
+  if (typeof window === 'undefined') {
+    return { balance: 0 }
+  }
+  
   // Simulated backend - replace with real Supabase when ready
   const savedUser = readLS("auth_user")
   if (!savedUser) return { balance: 0 }
@@ -25,6 +32,11 @@ export async function fetchCredits(): Promise<CreditsInfo> {
 }
 
 export async function consumeOneCredit(meta: Record<string, any>): Promise<number> {
+  // 確保只在瀏覽器環境執行
+  if (typeof window === 'undefined') {
+    throw new Error("Not available on the server")
+  }
+  
   // Simulated backend - replace with Supabase RPC call
   const savedUser = readLS("auth_user")
   if (!savedUser) throw new Error("Not authenticated")

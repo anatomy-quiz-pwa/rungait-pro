@@ -1,3 +1,5 @@
+'use client'
+
 import { readLS, writeLS } from "@/lib/storage"
 import type { OfficialFile, PersonalFile, PubmedRecord, UserCollection } from "./types"
 
@@ -6,6 +8,11 @@ import type { OfficialFile, PersonalFile, PubmedRecord, UserCollection } from ".
 // ============================================================
 
 export async function listOfficialFiles(): Promise<OfficialFile[]> {
+  // 確保只在瀏覽器環境執行
+  if (typeof window === 'undefined') {
+    return []
+  }
+  
   const stored = readLS("library_official_files")
   if (stored) {
     return JSON.parse(stored)
@@ -58,6 +65,9 @@ export async function listOfficialFiles(): Promise<OfficialFile[]> {
 export async function addOfficialFile(
   file: Omit<OfficialFile, "id" | "created_at" | "updated_at">,
 ): Promise<OfficialFile> {
+  if (typeof window === 'undefined') {
+    throw new Error("Not available on the server")
+  }
   const files = await listOfficialFiles()
   const newFile: OfficialFile = {
     ...file,
@@ -71,6 +81,7 @@ export async function addOfficialFile(
 }
 
 export async function updateOfficialFile(id: string, updates: Partial<OfficialFile>): Promise<void> {
+  if (typeof window === 'undefined') return
   const files = await listOfficialFiles()
   const index = files.findIndex((f) => f.id === id)
   if (index !== -1) {
@@ -84,6 +95,7 @@ export async function updateOfficialFile(id: string, updates: Partial<OfficialFi
 }
 
 export async function deleteOfficialFile(id: string): Promise<void> {
+  if (typeof window === 'undefined') return
   const files = await listOfficialFiles()
   const filtered = files.filter((f) => f.id !== id)
   writeLS("library_official_files", JSON.stringify(filtered))
@@ -94,6 +106,9 @@ export async function deleteOfficialFile(id: string): Promise<void> {
 // ============================================================
 
 export async function listPersonalFiles(userId: string): Promise<PersonalFile[]> {
+  if (typeof window === 'undefined') {
+    return []
+  }
   const stored = readLS(`personal_files_${userId}`)
   if (stored) {
     return JSON.parse(stored)
@@ -105,6 +120,9 @@ export async function addPersonalFile(
   userId: string,
   file: Omit<PersonalFile, "id" | "user_id" | "created_at">,
 ): Promise<PersonalFile> {
+  if (typeof window === 'undefined') {
+    throw new Error("Not available on the server")
+  }
   const files = await listPersonalFiles(userId)
   const newFile: PersonalFile = {
     ...file,
@@ -118,6 +136,7 @@ export async function addPersonalFile(
 }
 
 export async function updatePersonalFile(userId: string, id: string, updates: Partial<PersonalFile>): Promise<void> {
+  if (typeof window === 'undefined') return
   const files = await listPersonalFiles(userId)
   const index = files.findIndex((f) => f.id === id)
   if (index !== -1) {
@@ -127,6 +146,7 @@ export async function updatePersonalFile(userId: string, id: string, updates: Pa
 }
 
 export async function deletePersonalFile(userId: string, id: string): Promise<void> {
+  if (typeof window === 'undefined') return
   const files = await listPersonalFiles(userId)
   const filtered = files.filter((f) => f.id !== id)
   writeLS(`personal_files_${userId}`, JSON.stringify(filtered))
@@ -139,6 +159,9 @@ export async function deletePersonalFile(userId: string, id: string): Promise<vo
 export async function listPubmedRecords(filters?: { keyword?: string; yearFrom?: number; yearTo?: number }): Promise<
   PubmedRecord[]
 > {
+  if (typeof window === 'undefined') {
+    return []
+  }
   const stored = readLS("pubmed_records")
   let records: PubmedRecord[] = []
 
@@ -215,6 +238,9 @@ export async function listPubmedRecords(filters?: { keyword?: string; yearFrom?:
 // ============================================================
 
 export async function listUserCollections(userId: string): Promise<UserCollection[]> {
+  if (typeof window === 'undefined') {
+    return []
+  }
   const stored = readLS(`user_collections_${userId}`)
   return stored ? JSON.parse(stored) : []
 }
@@ -225,6 +251,9 @@ export async function addToCollection(
   sourceId: string,
   note?: string,
 ): Promise<UserCollection> {
+  if (typeof window === 'undefined') {
+    throw new Error("Not available on the server")
+  }
   const collections = await listUserCollections(userId)
 
   // Check if already exists
@@ -248,6 +277,7 @@ export async function addToCollection(
 }
 
 export async function removeFromCollection(userId: string, collectionId: string): Promise<void> {
+  if (typeof window === 'undefined') return
   const collections = await listUserCollections(userId)
   const filtered = collections.filter((c) => c.id !== collectionId)
   writeLS(`user_collections_${userId}`, JSON.stringify(filtered))

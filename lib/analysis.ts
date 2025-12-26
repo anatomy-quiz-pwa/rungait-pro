@@ -1,9 +1,21 @@
+'use client'
+
 import { readLS, writeLS } from "@/lib/storage"
 import type { AnalysisPacketWithMeta, CaseMeta } from "./types"
 import { createMockAnalysis } from "./mock-data"
 
 // Simulated backend - replace with Supabase when ready
 export async function getAnalysisWithMeta(id: string): Promise<AnalysisPacketWithMeta> {
+  // 確保只在瀏覽器環境執行
+  if (typeof window === 'undefined') {
+    const analysis = createMockAnalysis(id)
+    return {
+      ...analysis,
+      case_meta: {},
+      library_sources: ["official"],
+    }
+  }
+
   const analysis = createMockAnalysis(id)
 
   // Try to load case_meta from localStorage
@@ -24,11 +36,13 @@ export async function getAnalysisWithMeta(id: string): Promise<AnalysisPacketWit
 }
 
 export async function updateCaseMeta(id: string, meta: CaseMeta): Promise<void> {
+  if (typeof window === 'undefined') return
   const key = `case_meta_${id}`
   writeLS(key, JSON.stringify(meta))
 }
 
 export async function reanalyzeWithLibraries(id: string, selectedSources: string[]): Promise<void> {
+  if (typeof window === 'undefined') return
   // Save selected sources for this analysis
   const key = `analysis_sources_${id}`
   writeLS(key, JSON.stringify(selectedSources))

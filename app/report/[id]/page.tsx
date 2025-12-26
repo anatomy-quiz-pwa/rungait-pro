@@ -89,6 +89,7 @@ export default function ReportPage({ params }: { params: { id: string } }) {
   }, [citations, filteredRecommendations])
 
   const handleCitationClick = (citationId: string) => {
+    if (typeof document === 'undefined') return
     const element = document.getElementById(`citation-${citationId}`)
     if (element) {
       element.scrollIntoView({ behavior: "smooth", block: "center" })
@@ -102,7 +103,9 @@ export default function ReportPage({ params }: { params: { id: string } }) {
   }
 
   const handlePrint = () => {
-    window.print()
+    if (typeof window !== 'undefined') {
+      window.print()
+    }
   }
 
   const handleDownloadPDF = () => {

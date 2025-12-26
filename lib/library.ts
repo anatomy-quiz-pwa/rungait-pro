@@ -1,3 +1,5 @@
+'use client'
+
 import { readLS, writeLS } from "@/lib/storage"
 import type { LibrarySource } from "./types"
 
@@ -35,6 +37,11 @@ export async function listLibrarySources(): Promise<LibrarySource[]> {
 }
 
 export async function loadUserLibrarySelection(): Promise<Map<string, boolean>> {
+  // 確保只在瀏覽器環境執行
+  if (typeof window === 'undefined') {
+    return new Map([["official", true]])
+  }
+  
   // Simulated - reads from localStorage
   const savedUser = readLS("auth_user")
   if (!savedUser) return new Map([["official", true]])
@@ -52,6 +59,7 @@ export async function loadUserLibrarySelection(): Promise<Map<string, boolean>> 
 }
 
 export async function saveUserLibrarySelection(source_id: string, selected: boolean): Promise<void> {
+  if (typeof window === 'undefined') return
   const savedUser = readLS("auth_user")
   if (!savedUser) throw new Error("Not authenticated")
 

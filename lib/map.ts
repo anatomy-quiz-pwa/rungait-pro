@@ -1,3 +1,5 @@
+'use client'
+
 import { isBrowser, readLS, writeLS } from "@/lib/storage"
 import type { LocationRow } from "./types"
 
@@ -19,7 +21,8 @@ export async function listLocations({
   city?: string
   publicOnly?: boolean
 }): Promise<LocationRow[]> {
-  if (!isBrowser()) return []
+  // 確保只在瀏覽器環境執行
+  if (typeof window === 'undefined' || !isBrowser()) return []
   let locations: LocationRow[] = parseLocations(readLS("treadmill_locations"))
 
   locations = locations.filter((loc) => loc.status === "approved")
@@ -73,7 +76,8 @@ export async function submitLocation(payload: Partial<LocationRow>): Promise<str
 }
 
 export async function myLocations(): Promise<LocationRow[]> {
-  if (!isBrowser()) return []
+  // 確保只在瀏覽器環境執行
+  if (typeof window === 'undefined' || !isBrowser()) return []
 
   const savedUser = readLS("auth_user")
   if (!savedUser) return []

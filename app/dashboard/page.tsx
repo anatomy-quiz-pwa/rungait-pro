@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useMemo, useEffect } from "react"
+import dynamic from "next/dynamic"
 import { useAuth } from "@/lib/auth-context"
 import { useI18n } from "@/lib/i18n/i18n-provider"
 import { useRouter } from "next/navigation"
@@ -11,9 +12,15 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Progress } from "@/components/ui/progress"
 import { getMockAnalyses } from "@/lib/mock-data"
-import { fetchCredits } from "@/lib/usage"
 import { AnalysesList } from "@/components/dashboard/analyses-list"
-import { MyLocations } from "@/components/dashboard/my-locations"
+
+// 直接 import，但確保在 useEffect 中使用
+import { fetchCredits } from "@/lib/usage"
+
+// 動態載入 MyLocations 以避免 SSR 問題
+const MyLocations = dynamic(() => import("@/components/dashboard/my-locations").then(mod => ({ default: mod.MyLocations })), {
+  ssr: false
+})
 import {
   BarChart3,
   Clock,
@@ -45,8 +52,16 @@ export default function DashboardPage() {
   }, [user, billingInfo])
 
   const loadCredits = async () => {
-    const data = await fetchCredits()
-    setCredits({ balance: data.balance })
+    // 確保只在瀏覽器環境執行
+    if (typeof window === 'undefined') return
+    
+    try {
+      const data = await fetchCredits()
+      setCredits({ balance: data.points || 0 })
+    } catch (error) {
+      console.error('Failed to load credits:', error)
+      setCredits({ balance: 0 })
+    }
   }
 
   const filteredAnalyses = useMemo(() => {
@@ -84,7 +99,7 @@ export default function DashboardPage() {
             {t("welcome")}, {user.email}!
           </h2>
           <p className="text-slate-300 mb-4">
-            {t("youHave")} <span className="text-cyan-400 font-bold text-2xl">{credits?.balance || 0}</span>{" "}
+            {t("youHave")} <span className="text-cyan-400 font-bold text-2xl">{credits?.balance ?? 0}</span>{" "}
             {t("points")}。{t("eachAnalysis")} <span className="font-semibold">5</span> {t("points")}。
           </p>
           <div className="flex gap-3">
