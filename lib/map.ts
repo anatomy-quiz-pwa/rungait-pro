@@ -94,12 +94,12 @@ export async function approveLocation(id: string): Promise<void> {
   if (!isBrowser()) return
 
   const locations: LocationRow[] = parseLocations(readLS("treadmill_locations"))
-  const location = locations.find((loc) => loc.id === id)
-  if (location) {
-    location.status = "approved"
+  const loc = locations.find((l) => l.id === id)
+  if (loc) {
+    loc.status = "approved"
     writeLS("treadmill_locations", JSON.stringify(locations))
 
-    if (location.allow_public) {
+    if (loc.allow_public) {
       const savedUser = readLS("auth_user")
       if (savedUser) {
         const user = JSON.parse(savedUser)
@@ -114,9 +114,9 @@ export async function rejectLocation(id: string): Promise<void> {
   if (!isBrowser()) return
 
   const locations: LocationRow[] = parseLocations(readLS("treadmill_locations"))
-  const location = locations.find((loc) => loc.id === id)
-  if (location) {
-    location.status = "rejected"
+  const loc = locations.find((l) => l.id === id)
+  if (loc) {
+    loc.status = "rejected"
     writeLS("treadmill_locations", JSON.stringify(locations))
   }
 }
