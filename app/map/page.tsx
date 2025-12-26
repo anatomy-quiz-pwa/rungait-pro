@@ -1,8 +1,8 @@
-import dynamic from 'next/dynamic'
+import dynamicImport from 'next/dynamic'
 
 // 動態載入 RunGaitMap，避免 SSR 問題
-const RunGaitMap = dynamic(() => import('@/components/RunGaitMap'), {
-  ssr: false,
+// 注意：在 Server Component 中不能使用 ssr: false
+const RunGaitMap = dynamicImport(() => import('@/components/RunGaitMap'), {
   loading: () => (
     <div className="flex items-center justify-center h-full bg-[#0B0F12]">
       <div className="text-center text-slate-400">
