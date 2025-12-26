@@ -108,6 +108,13 @@ export default function RunGaitMap() {
     },
   ], [])
 
+  // Debug: 在開發環境顯示 API key 狀態（僅前幾個字元）
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[RunGaitMap] API Key status:', apiKey ? `${apiKey.substring(0, 10)}...` : 'NOT SET')
+    }
+  }, [apiKey])
+
   // 若缺少 API key，顯示清單模式提示
   if (!apiKey || apiKey.trim() === '') {
     return (
@@ -118,11 +125,17 @@ export default function RunGaitMap() {
           <p className="text-xs text-slate-500 mb-2">
             請在 Vercel Environment Variables 中設定：
           </p>
-          <p className="text-xs text-cyan-400 font-mono">
+          <p className="text-xs text-cyan-400 font-mono mb-2">
             NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
           </p>
+          <p className="text-xs text-slate-500 mb-2">
+            值：AIzaSyA8ZJkjc18cCppnTCrrtu0105jBewHt1dU
+          </p>
           <p className="text-xs text-slate-500 mt-4">
-            設定後請重新部署
+            設定後請重新部署（Redeploy）
+          </p>
+          <p className="text-xs text-amber-400 mt-2">
+            注意：環境變數必須在 Production 環境中設定
           </p>
         </div>
       </div>
