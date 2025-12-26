@@ -23,26 +23,26 @@ export async function listLocations({
 }): Promise<LocationRow[]> {
   // 確保只在瀏覽器環境執行
   if (typeof window === 'undefined' || !isBrowser()) return []
-  let locations: LocationRow[] = parseLocations(readLS("treadmill_locations"))
+  let locationList: LocationRow[] = parseLocations(readLS("treadmill_locations"))
 
-  locations = locations.filter((loc) => loc.status === "approved")
+  locationList = locationList.filter((loc) => loc.status === "approved")
 
   if (publicOnly) {
-    locations = locations.filter((loc) => loc.allow_public)
+    locationList = locationList.filter((loc) => loc.allow_public)
   }
 
   if (city) {
     const cityLower = city.toLowerCase()
-    locations = locations.filter((loc) => loc.city?.toLowerCase().includes(cityLower))
+    locationList = locationList.filter((loc) => loc.city?.toLowerCase().includes(cityLower))
   }
 
   if (q) {
-    locations = locations.filter(
+    locationList = locationList.filter(
       (loc) => loc.name.toLowerCase().includes(q.toLowerCase()) || loc.address?.toLowerCase().includes(q.toLowerCase()),
     )
   }
 
-  return locations.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+  return locationList.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
 }
 
 export async function submitLocation(payload: Partial<LocationRow>): Promise<string> {
@@ -52,7 +52,7 @@ export async function submitLocation(payload: Partial<LocationRow>): Promise<str
   if (!savedUser) throw new Error("Not authenticated")
 
   const user = JSON.parse(savedUser)
-  const locations: LocationRow[] = parseLocations(readLS("treadmill_locations"))
+  const locationList: LocationRow[] = parseLocations(readLS("treadmill_locations"))
 
   const newLocation: LocationRow = {
     id: String(Date.now()),
@@ -70,8 +70,8 @@ export async function submitLocation(payload: Partial<LocationRow>): Promise<str
     lng: payload.lng,
   }
 
-  locations.push(newLocation)
-  writeLS("treadmill_locations", JSON.stringify(locations))
+  locationList.push(newLocation)
+  writeLS("treadmill_locations", JSON.stringify(locationList))
 
   return newLocation.id
 }
@@ -84,9 +84,9 @@ export async function myLocations(): Promise<LocationRow[]> {
   if (!savedUser) return []
 
   const user = JSON.parse(savedUser)
-  const locations: LocationRow[] = parseLocations(readLS("treadmill_locations"))
+  const locationList: LocationRow[] = parseLocations(readLS("treadmill_locations"))
 
-  return locations
+  return locationList
     .filter((loc) => loc.created_by === user.id)
     .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
 }
@@ -94,11 +94,11 @@ export async function myLocations(): Promise<LocationRow[]> {
 export async function approveLocation(id: string): Promise<void> {
   if (!isBrowser()) return
 
-  const locations: LocationRow[] = parseLocations(readLS("treadmill_locations"))
-  const foundLocation = locations.find((loc) => loc.id === id)
+  const locationList: LocationRow[] = parseLocations(readLS("treadmill_locations"))
+  const foundLocation = locationList.find((loc) => loc.id === id)
   if (foundLocation) {
     foundLocation.status = "approved"
-    writeLS("treadmill_locations", JSON.stringify(locations))
+    writeLS("treadmill_locations", JSON.stringify(locationList))
 
     if (foundLocation.allow_public) {
       const savedUser = readLS("auth_user")
@@ -114,10 +114,10 @@ export async function approveLocation(id: string): Promise<void> {
 export async function rejectLocation(id: string): Promise<void> {
   if (!isBrowser()) return
 
-  const locations: LocationRow[] = parseLocations(readLS("treadmill_locations"))
-  const foundLocation = locations.find((loc) => loc.id === id)
+  const locationList: LocationRow[] = parseLocations(readLS("treadmill_locations"))
+  const foundLocation = locationList.find((loc) => loc.id === id)
   if (foundLocation) {
     foundLocation.status = "rejected"
-    writeLS("treadmill_locations", JSON.stringify(locations))
+    writeLS("treadmill_locations", JSON.stringify(locationList))
   }
 }
