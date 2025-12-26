@@ -1,9 +1,5 @@
 "use client"
 
-// 強制動態渲染，避免 SSR 問題
-export const dynamic = 'force-dynamic'
-export const revalidate = 0
-
 import { useState, useMemo, useEffect } from "react"
 import dynamic from "next/dynamic"
 import { useAuth } from "@/lib/auth-context"
