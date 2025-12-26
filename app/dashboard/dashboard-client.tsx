@@ -1,24 +1,41 @@
-import dynamic from 'next/dynamic'
+"use client"
 
-// 完全避免 SSR，只在 client 端渲染
-const DashboardClient = dynamic(() => import('./dashboard-client'), {
-  ssr: false,
-  loading: () => (
-    <div className="flex items-center justify-center min-h-screen bg-[#0B0F12]">
-      <div className="text-center text-slate-400">
-        <p>Loading dashboard...</p>
-      </div>
-    </div>
-  ),
+import { useState, useMemo, useEffect } from "react"
+import dynamic from "next/dynamic"
+import { useAuth } from "@/lib/auth-context"
+import { useI18n } from "@/lib/i18n/i18n-provider"
+import { useRouter } from "next/navigation"
+import { AppHeader } from "@/components/rungait/app-header"
+import { Card } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
+import { Input } from "@/components/ui/input"
+import { Progress } from "@/components/ui/progress"
+import { getMockAnalyses } from "@/lib/mock-data"
+import { AnalysesList } from "@/components/dashboard/analyses-list"
+
+// 直接 import，但確保在 useEffect 中使用
+import { fetchCredits } from "@/lib/usage"
+
+// 動態載入 MyLocations 以避免 SSR 問題
+const MyLocations = dynamic(() => import("@/components/dashboard/my-locations").then(mod => ({ default: mod.MyLocations })), {
+  ssr: false
 })
+import {
+  BarChart3,
+  Clock,
+  CreditCard,
+  FileText,
+  Filter,
+  TrendingUp,
+  Upload,
+  Calendar,
+  Gauge,
+  ShoppingCart,
+} from "lucide-react"
+import Image from "next/image"
 
-// 強制 dynamic rendering
-export const dynamic = 'force-dynamic'
-export const revalidate = 0
-
-export default function DashboardPage() {
-  return <DashboardClient />
-}
+export default function DashboardClient() {
   const { user, billingInfo } = useAuth()
   const { t } = useI18n()
   const router = useRouter()
@@ -307,3 +324,4 @@ export default function DashboardPage() {
     </div>
   )
 }
+
