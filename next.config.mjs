@@ -6,6 +6,16 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
+  // 禁用 Turbopack 以使用 webpack（Turbopack 可能不支援某些配置）
+  // 或者使用 experimental.turbopack 來配置
+  experimental: {
+    // 暫時禁用 Turbopack 以確保 webpack 配置生效
+    // turbopack: {
+    //   resolveAlias: {
+    //     '@react-google-maps/api': false,
+    //   },
+    // },
+  },
   // 配置 webpack 來處理 @react-google-maps/api 的 SSR 問題
   webpack: (config, { isServer, webpack }) => {
     if (isServer) {
@@ -21,6 +31,7 @@ const nextConfig = {
       config.plugins.push(
         new webpack.DefinePlugin({
           'typeof location': JSON.stringify('undefined'),
+          'location': JSON.stringify(undefined),
         })
       )
     }
