@@ -1,32 +1,22 @@
-import { createClient } from "@supabase/supabase-js"
+/**
+ * ❌ DEPRECATED - DO NOT USE
+ * 
+ * This file caused SSR to import browser-only code and broke Vercel builds
+ * with "ReferenceError: location is not defined" errors.
+ * 
+ * Use instead:
+ *   - lib/supabase-browser.ts (for Client Components only)
+ *   - lib/supabase-server.ts (for Server Components and Route Handlers)
+ * 
+ * Migration guide:
+ *   - Client Components: import { supabaseBrowser } from '@/lib/supabase-browser'
+ *     Then call: const supabase = supabaseBrowser()
+ *   - Server Components/API Routes: import { supabaseServer } from '@/lib/supabase-server'
+ *     Then call: const supabase = await supabaseServer(request)
+ */
 
-// 延遲建立 client，避免在 build 時檢查環境變數
-const getSupabaseClient = () => {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  if (!url) {
-    throw new Error("Missing NEXT_PUBLIC_SUPABASE_URL. Please set it in .env.local")
-  }
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-  if (!key) {
-    throw new Error("Missing NEXT_PUBLIC_SUPABASE_ANON_KEY. Please set it in .env.local")
-  }
-  return createClient(url, key, {
-    auth: {
-      persistSession: true,
-      autoRefreshToken: true,
-    },
-  })
-}
-
-// 在 client component 中使用時才建立
-let supabaseInstance: ReturnType<typeof createClient> | null = null
-
-export const supabase = new Proxy({} as ReturnType<typeof createClient>, {
-  get(_target, prop) {
-    if (!supabaseInstance) {
-      supabaseInstance = getSupabaseClient()
-    }
-    return (supabaseInstance as any)[prop]
-  },
-})
-
+throw new Error(
+  'DEPRECATED: Do not import supabaseClient.ts. ' +
+  'Use supabase-browser.ts (client) or supabase-server.ts (server) instead. ' +
+  'See the file header for migration instructions.'
+)
