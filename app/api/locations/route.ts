@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createServerClient, getServerUser } from "@/lib/supabase/server"
+import { supabaseServer, getServerUser } from "@/lib/supabase-server"
 
 /**
  * GET /api/locations
@@ -8,7 +8,7 @@ import { createServerClient, getServerUser } from "@/lib/supabase/server"
  */
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createServerClient(request)
+    const supabase = await supabaseServer(request)
 
     // 查詢 view
     const { data, error } = await supabase
@@ -117,7 +117,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 6. 插入資料（RLS 會自動檢查 can_upload）
-    const supabase = await createServerClient(request)
+    const supabase = await supabaseServer(request)
     const { data, error } = await supabase
       .from("curved_treadmill_locations")
       .insert(insertData)

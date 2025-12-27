@@ -1,6 +1,8 @@
-import { supabase } from '@/lib/supabaseClient'
+'use client'
+import { supabaseBrowser } from '@/lib/supabase-browser'
 
 export async function checkLastUpload() {
+  const supabase = supabaseBrowser()
   const { data: auth } = await supabase.auth.getUser()
   const userId = auth.user?.id
   if (!userId) {

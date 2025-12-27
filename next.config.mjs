@@ -6,16 +6,9 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
-  // 禁用 Turbopack 以使用 webpack（Turbopack 可能不支援某些配置）
-  // 或者使用 experimental.turbopack 來配置
-  experimental: {
-    // 暫時禁用 Turbopack 以確保 webpack 配置生效
-    // turbopack: {
-    //   resolveAlias: {
-    //     '@react-google-maps/api': false,
-    //   },
-    // },
-  },
+  // 在 Next.js 16 中，Turbopack 是預設的，但我們需要 webpack 配置
+  // 設定空的 turbopack 配置以使用 webpack
+  turbopack: {},
   // 配置 webpack 來處理 @react-google-maps/api 的 SSR 問題
   webpack: (config, { isServer, webpack }) => {
     if (isServer) {

@@ -114,7 +114,9 @@ export default function ReportPage({ params }: { params: { id: string } }) {
 
   const handleCopyLink = () => {
     if (typeof window !== 'undefined') {
-      navigator.clipboard.writeText(window.location.href)
+      if (typeof window !== 'undefined') {
+        navigator.clipboard.writeText(window.location.href)
+      }
       alert("Link copied to clipboard")
     }
   }
@@ -153,7 +155,9 @@ export default function ReportPage({ params }: { params: { id: string } }) {
 
       alert(t("reanalyzed"))
       if (typeof window !== 'undefined') {
-        window.location.reload()
+        if (typeof window !== 'undefined') {
+          window.location.reload()
+        }
       }
     } catch (error: any) {
       if (error.message === "INSUFFICIENT_CREDITS") {

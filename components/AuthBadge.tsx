@@ -1,12 +1,13 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { supabase } from '@/lib/supabaseClient'
+import { supabaseBrowser } from '@/lib/supabase-browser'
 
 export default function AuthBadge() {
   const [uid, setUid] = useState<string | null | undefined>(undefined)
 
   useEffect(() => {
+    const supabase = supabaseBrowser()
     supabase.auth.getUser().then(({ data }) => setUid(data.user?.id ?? null))
     const { data: subscription } = supabase.auth.onAuthStateChange((_event, session) => {
       setUid(session?.user?.id ?? null)

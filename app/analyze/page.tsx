@@ -1,7 +1,7 @@
 "use client"
 
 import { Suspense, useEffect, useRef, useState } from "react"
-import { supabase } from "@/lib/supabaseClient"
+import { supabaseBrowser } from "@/lib/supabase-browser"
 import { angleDeg, smooth } from "@/lib/angles"
 import { segmentPhases, type FrameAngles } from "@/lib/gait"
 import { useAnalysisStore } from "@/lib/analysisStore"
@@ -88,6 +88,7 @@ function AnalyzeInner() {
   }, [pendingFile, setPending, setProgress, setStatus, setStoreError])
 
   async function ensureAuthed() {
+    const supabase = supabaseBrowser()
     const { data } = await supabase.auth.getUser()
     if (!data.user) throw new Error("請先到 /auth 登入再開始分析")
     return data.user
@@ -95,6 +96,7 @@ function AnalyzeInner() {
 
   async function handleFile(file: File, range: TrimRange | null) {
     const user = await ensureAuthed()
+    const supabase = supabaseBrowser()
     setProcessing(true)
     setAngles([])
     setSummary(null)
@@ -242,6 +244,7 @@ function AnalyzeInner() {
       setStatus("saving")
       setProgress(95)
 
+      const supabase = supabaseBrowser()
       const { error: analysisError } = await supabase.from("analysis_results").insert({
         user_id: user.id,
         video_id: videoId,
