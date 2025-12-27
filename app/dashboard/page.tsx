@@ -5,6 +5,7 @@ import dynamicImport from 'next/dynamic'
 
 // 完全避免 SSR，只在 client 端渲染
 const DashboardClient = dynamicImport(() => import('./dashboard-client'), {
+  ssr: false, // 完全禁用 SSR，只在 client 端載入
   loading: () => (
     <div className="flex items-center justify-center min-h-screen bg-[#0B0F12]">
       <div className="text-center text-slate-400">
