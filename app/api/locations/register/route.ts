@@ -1,0 +1,215 @@
+import { NextRequest, NextResponse } from "next/server"
+import { supabaseServer, getServerUser } from "@/lib/supabase-server"
+
+/**
+ * POST /api/locations/register
+ * 註冊新的 curved treadmill location（需登入且 can_upload=true）
+ * 支援兩種來源：'google' (Google Places) 或 'manual' (手動選點)
+ */
+export async function POST(request: NextRequest) {
+  try {
+    // 1. 檢查登入狀態
+    const user = await getServerUser(request)
+    if (!user) {
+      return NextResponse.json(
+        { error: "Unauthorized. Please log in." },
+        { status: 401 }
+      )
+    }
+
+    // 2. 解析請求 body
+    let body
+    try {
+      body = await request.json()
+    } catch (e) {
+      return NextResponse.json(
+        { error: "Invalid JSON in request body" },
+        { status: 400 }
+      )
+    }
+
+    // 3. 驗證必填欄位
+    const { name, lat, lng, source } = body
+    
+    if (!name || typeof name !== "string" || name.trim().length === 0) {
+      return NextResponse.json(
+        { error: "Field 'name' is required and must be a non-empty string" },
+        { status: 400 }
+      )
+    }
+
+    if (lat === undefined || lat === null || typeof lat !== "number") {
+      return NextResponse.json(
+        { error: "Field 'lat' is required and must be a number" },
+        { status: 400 }
+      )
+    }
+
+    if (lng === undefined || lng === null || typeof lng !== "number") {
+      return NextResponse.json(
+        { error: "Field 'lng' is required and must be a number" },
+        { status: 400 }
+      )
+    }
+
+    if (source !== 'google' && source !== 'manual') {
+      return NextResponse.json(
+        { error: "Field 'source' must be either 'google' or 'manual'" },
+        { status: 400 }
+      )
+    }
+
+    // 4. 驗證 lat/lng 範圍
+    if (lat < -90 || lat > 90) {
+      return NextResponse.json(
+        { error: "Field 'lat' must be between -90 and 90" },
+        { status: 400 }
+      )
+    }
+
+    if (lng < -180 || lng > 180) {
+      return NextResponse.json(
+        { error: "Field 'lng' must be between -180 and 180" },
+        { status: 400 }
+      )
+    }
+
+    // 5. 如果是 Google Places，檢查去重（如果表有 google_place_id 欄位）
+    const supabase = await supabaseServer(request)
+    
+    // 先檢查表結構是否有 google_place_id 欄位
+    // 如果 source='google' 且有 google_place_id，檢查是否已存在
+    if (source === 'google' && body.google_place_id) {
+      // 嘗試查詢是否有 google_place_id 欄位
+      // 如果表沒有這個欄位，這個查詢會失敗，我們就跳過去重檢查
+      try {
+        const { data: existing } = await supabase
+          .from("curved_treadmill_locations")
+          .select("id, name")
+          .eq("google_place_id", body.google_place_id)
+          .maybeSingle()
+
+        if (existing) {
+          return NextResponse.json(
+            {
+              error: "此地點已經註冊過了",
+              existing_id: existing.id,
+              existing_name: existing.name,
+            },
+            { status: 409 }
+          )
+        }
+      } catch (error: any) {
+        // 如果表沒有 google_place_id 欄位，忽略錯誤繼續
+        if (!error.message?.includes("column") && !error.message?.includes("does not exist")) {
+          console.warn("[register] Could not check for duplicate google_place_id:", error.message)
+        }
+      }
+    }
+
+    // 6. 準備插入資料
+    // 注意：根據實際表結構，可能沒有 source、google_place_id、status 欄位
+    // 如果沒有，這些欄位會被忽略
+    const insertData: any = {
+      owner_user_id: user.id,
+      name: name.trim(),
+      lat: Number(lat),
+      lng: Number(lng),
+      address: body.address || null,
+      city: body.city || null,
+      description: body.description || null,
+      contact_info: body.contact_info || null,
+    }
+
+    // 嘗試加入 source 和 google_place_id（如果表有這些欄位）
+    // 如果表沒有，Supabase 會忽略這些欄位
+    if (source) {
+      insertData.source = source
+    }
+    if (body.google_place_id) {
+      insertData.google_place_id = body.google_place_id
+    }
+
+    // 7. 插入資料（RLS 會自動檢查 can_upload）
+    const { data, error } = await supabase
+      .from("curved_treadmill_locations")
+      .insert(insertData)
+      .select()
+      .single()
+
+    if (error) {
+      console.error("[POST /api/locations/register] Supabase error:", error)
+
+      // 檢查是否為權限錯誤（RLS 拒絕）
+      if (error.code === "42501" || error.message.includes("permission") || error.message.includes("policy")) {
+        return NextResponse.json(
+          { 
+            error: "Forbidden. You do not have permission to create locations. Please ensure can_upload is enabled in your account.",
+            details: "RLS policy violation: user_access.can_upload must be true"
+          },
+          { status: 403 }
+        )
+      }
+
+      // 檢查是否為欄位不存在的錯誤
+      if (error.message.includes("column") || error.message.includes("does not exist")) {
+        // 移除不存在的欄位，重試插入
+        const cleanedData: any = {
+          owner_user_id: user.id,
+          name: name.trim(),
+          lat: Number(lat),
+          lng: Number(lng),
+          address: body.address || null,
+          city: body.city || null,
+          description: body.description || null,
+          contact_info: body.contact_info || null,
+        }
+
+        const { data: retryData, error: retryError } = await supabase
+          .from("curved_treadmill_locations")
+          .insert(cleanedData)
+          .select()
+          .single()
+
+        if (retryError) {
+          return NextResponse.json(
+            { error: "Failed to create location", details: retryError.message },
+            { status: 500 }
+          )
+        }
+
+        return NextResponse.json(
+          {
+            ok: true,
+            id: retryData.id,
+            message: "Location created successfully",
+            data: retryData,
+          },
+          { status: 201 }
+        )
+      }
+
+      return NextResponse.json(
+        { error: "Failed to create location", details: error.message },
+        { status: 500 }
+      )
+    }
+
+    return NextResponse.json(
+      {
+        ok: true,
+        id: data.id,
+        message: "Location created successfully",
+        data,
+      },
+      { status: 201 }
+    )
+  } catch (error) {
+    console.error("[POST /api/locations/register] Unexpected error:", error)
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    )
+  }
+}
+

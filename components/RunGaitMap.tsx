@@ -209,6 +209,20 @@ export default function RunGaitMap() {
               {selected.name}
             </div>
             
+            {/* Address */}
+            {selected.address && (
+              <div style={{ fontSize: '14px', marginBottom: '8px', color: '#374151', lineHeight: '1.5' }}>
+                📍 {selected.address}
+              </div>
+            )}
+            
+            {/* Source */}
+            {(selected as any).source && (
+              <div style={{ fontSize: '12px', marginBottom: '8px', color: '#6b7280' }}>
+                來源: {(selected as any).source === 'google' ? 'Google 商家' : '手動新增'}
+              </div>
+            )}
+            
             {/* Description */}
             {selected.description && (
               <div style={{ fontSize: '14px', marginBottom: '8px', color: '#374151', lineHeight: '1.5' }}>

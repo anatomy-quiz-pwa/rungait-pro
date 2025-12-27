@@ -1,39 +1,35 @@
 "use client"
 
-import type React from "react"
-import { useState, useCallback, useMemo } from "react"
+import { useState, useCallback, useMemo, useEffect } from "react"
+import { GoogleMap, Marker, useLoadScript } from '@react-google-maps/api'
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { Switch } from "@/components/ui/switch"
 import { Card } from "@/components/ui/card"
-import { useI18n } from "@/lib/i18n/i18n-provider"
 import { Loader2, MapPin, CheckCircle2 } from "lucide-react"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { GoogleMap, Marker, useLoadScript } from '@react-google-maps/api'
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { useToast } from "@/hooks/use-toast"
 
-interface LocationFormProps {
+interface ManualLocationFormProps {
   onSuccess?: () => void
 }
 
 const mapContainerStyle = { width: '100%', height: '400px' }
-const defaultCenter = { lat: 25.033, lng: 121.565 } // 台北 101
+const defaultCenter = { lat: 25.0330, lng: 121.5654 } // 台北 101
 
-export function LocationForm({ onSuccess }: LocationFormProps) {
-  const { t } = useI18n()
+export function ManualLocationForm({ onSuccess }: ManualLocationFormProps) {
   const [loading, setLoading] = useState(false)
   const [selectedLocation, setSelectedLocation] = useState<{ lat: number; lng: number } | null>(null)
   const [mapCenter, setMapCenter] = useState(defaultCenter)
   const [error, setError] = useState<string | null>(null)
+  const { toast } = useToast()
   
   const [formData, setFormData] = useState({
     name: "",
-    city: "",
     address: "",
-    description: "",
     contact_info: "",
+    description: "",
   })
 
   // 載入 Google Maps
@@ -46,8 +42,36 @@ export function LocationForm({ onSuccess }: LocationFormProps) {
     ...(apiKey ? {} : { libraries: [] }),
   })
 
+  // 嘗試取得使用者位置
+  useEffect(() => {
+    if (typeof window !== 'undefined' && navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setMapCenter({
+            lat: position.coords.latitude,
+            lng: position.coords.longitude,
+          })
+        },
+        () => {
+          // 如果取得位置失敗，使用預設位置
+          console.log('無法取得使用者位置，使用預設位置')
+        }
+      )
+    }
+  }, [])
+
   // 處理地圖點擊事件
   const handleMapClick = useCallback((e: google.maps.MapMouseEvent) => {
+    if (e.latLng) {
+      const lat = e.latLng.lat()
+      const lng = e.latLng.lng()
+      setSelectedLocation({ lat, lng })
+      setError(null)
+    }
+  }, [])
+
+  // 處理 marker 拖曳
+  const handleMarkerDragEnd = useCallback((e: google.maps.MapMouseEvent) => {
     if (e.latLng) {
       const lat = e.latLng.lat()
       const lng = e.latLng.lng()
@@ -96,14 +120,14 @@ export function LocationForm({ onSuccess }: LocationFormProps) {
     }
 
     if (!selectedLocation) {
-      setError("請在地圖上點選位置")
+      setError("請在地圖上點選或拖曳 marker 來設定位置")
       return
     }
 
     setLoading(true)
 
     try {
-      const response = await fetch('/api/locations', {
+      const response = await fetch('/api/locations/register', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -112,10 +136,10 @@ export function LocationForm({ onSuccess }: LocationFormProps) {
           name: formData.name.trim(),
           lat: selectedLocation.lat,
           lng: selectedLocation.lng,
-          city: formData.city.trim() || null,
           address: formData.address.trim() || null,
-          description: formData.description.trim() || null,
+          source: 'manual',
           contact_info: formData.contact_info.trim() || null,
+          description: formData.description.trim() || null,
         }),
       })
 
@@ -125,12 +149,16 @@ export function LocationForm({ onSuccess }: LocationFormProps) {
         throw new Error(result.error || '提交失敗')
       }
 
-      alert(t("submitSuccess") || "提交成功！審核通過後若選擇開放將自動獲得 5 點數")
+      toast({
+        title: "提交成功！",
+        description: "場地已成功註冊，審核通過後將顯示在地圖上",
+      })
+
       onSuccess?.()
     } catch (error) {
       const message = error instanceof Error ? error.message : "提交失敗，請重試"
       setError(message)
-      console.error('Location submission error:', error)
+      console.error('Location registration error:', error)
     } finally {
       setLoading(false)
     }
@@ -147,16 +175,16 @@ export function LocationForm({ onSuccess }: LocationFormProps) {
   }
 
   return (
-    <div className="space-y-6">
-      {/* 地圖選擇位置 */}
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {/* 地圖 */}
       <Card className="p-6 bg-slate-900/50 border-slate-700">
         <div className="mb-4">
           <Label className="text-base font-semibold flex items-center gap-2">
             <MapPin className="h-4 w-4 text-cyan-400" />
-            在地圖上點選位置 *
+            在地圖上點選或拖曳 marker 來設定位置 *
           </Label>
           <p className="text-xs text-slate-400 mt-1">
-            點擊地圖上的位置來設定場地座標
+            點擊地圖或拖曳藍色 marker 來設定場地座標
           </p>
         </div>
 
@@ -182,6 +210,8 @@ export function LocationForm({ onSuccess }: LocationFormProps) {
               {selectedLocation && (
                 <Marker
                   position={selectedLocation}
+                  draggable
+                  onDragEnd={handleMarkerDragEnd}
                   icon={{
                     url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(`
                       <svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -217,7 +247,7 @@ export function LocationForm({ onSuccess }: LocationFormProps) {
           )}
 
           <div className="space-y-2">
-            <Label htmlFor="name">{t("locationName")} *</Label>
+            <Label htmlFor="name">場地名稱 *</Label>
             <Input
               id="name"
               value={formData.name}
@@ -228,32 +258,8 @@ export function LocationForm({ onSuccess }: LocationFormProps) {
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="city">{t("city")}</Label>
-              <Input
-                id="city"
-                value={formData.city}
-                onChange={(e) => setFormData({ ...formData, city: e.target.value })}
-                className="bg-slate-800 border-slate-700"
-                placeholder="例如：台北市"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="contact_info">{t("contactInfo")}</Label>
-              <Input
-                id="contact_info"
-                value={formData.contact_info}
-                onChange={(e) => setFormData({ ...formData, contact_info: e.target.value })}
-                className="bg-slate-800 border-slate-700"
-                placeholder="電話或 Email"
-              />
-            </div>
-          </div>
-
           <div className="space-y-2">
-            <Label htmlFor="address">{t("address")}</Label>
+            <Label htmlFor="address">地址</Label>
             <Textarea
               id="address"
               value={formData.address}
@@ -265,7 +271,18 @@ export function LocationForm({ onSuccess }: LocationFormProps) {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="description">{t("notes")}</Label>
+            <Label htmlFor="contact_info">聯絡資訊</Label>
+            <Input
+              id="contact_info"
+              value={formData.contact_info}
+              onChange={(e) => setFormData({ ...formData, contact_info: e.target.value })}
+              className="bg-slate-800 border-slate-700"
+              placeholder="電話或 Email"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="description">備註</Label>
             <Textarea
               id="description"
               value={formData.description}
@@ -282,12 +299,12 @@ export function LocationForm({ onSuccess }: LocationFormProps) {
             disabled={loading || !selectedLocation}
           >
             {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {t("submit")}
+            送出註冊
           </Button>
 
           {!selectedLocation && (
             <p className="text-xs text-amber-400 text-center">
-              請先在地圖上點選位置
+              請先在地圖上點選或拖曳 marker 來設定位置
             </p>
           )}
         </form>
@@ -295,3 +312,4 @@ export function LocationForm({ onSuccess }: LocationFormProps) {
     </div>
   )
 }
+
