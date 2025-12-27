@@ -50,20 +50,27 @@ export default function RunGaitMap() {
   const [selected, setSelected] = useState<Location | null>(null)
 
   useEffect(() => {
-    fetch('/api/locations')
-      .then(r => r.json())
-      .then(result => {
+    const loadLocations = async () => {
+      try {
+        const response = await fetch('/api/locations')
+        const result = await response.json()
         if (result.success && result.data) {
           setLocations(result.data)
         } else {
           console.error('Failed to load locations:', result.error)
           setLocations([])
         }
-      })
-      .catch((error) => {
+      } catch (error) {
         console.error('Error fetching locations:', error)
         setLocations([])
-      })
+      }
+    }
+    
+    loadLocations()
+    
+    // 每 5 秒重新載入一次，以便顯示新註冊的點
+    const interval = setInterval(loadLocations, 5000)
+    return () => clearInterval(interval)
   }, [])
 
   // 計算地圖中心點（如果有 locations，使用第一個；否則使用預設）

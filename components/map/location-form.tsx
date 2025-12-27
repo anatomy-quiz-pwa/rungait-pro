@@ -103,7 +103,7 @@ export function LocationForm({ onSuccess }: LocationFormProps) {
     setLoading(true)
 
     try {
-      const response = await fetch('/api/locations', {
+      const response = await fetch('/api/locations/register', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -116,6 +116,7 @@ export function LocationForm({ onSuccess }: LocationFormProps) {
           address: formData.address.trim() || null,
           description: formData.description.trim() || null,
           contact_info: formData.contact_info.trim() || null,
+          source: 'manual',
         }),
       })
 
@@ -125,7 +126,10 @@ export function LocationForm({ onSuccess }: LocationFormProps) {
         throw new Error(result.error || '提交失敗')
       }
 
-      alert(t("submitSuccess") || "提交成功！審核通過後若選擇開放將自動獲得 5 點數")
+      // 使用 toast 替代 alert
+      if (typeof window !== 'undefined' && window.location) {
+        alert(t("submitSuccess") || "提交成功！審核通過後若選擇開放將自動獲得 5 點數")
+      }
       onSuccess?.()
     } catch (error) {
       const message = error instanceof Error ? error.message : "提交失敗，請重試"
