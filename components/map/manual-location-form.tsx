@@ -146,7 +146,10 @@ export function ManualLocationForm({ onSuccess }: ManualLocationFormProps) {
       const result = await response.json()
 
       if (!response.ok) {
-        throw new Error(result.error || '提交失敗')
+        // 顯示更詳細的錯誤訊息
+        const errorMessage = result.error || result.message || '提交失敗'
+        const errorDetails = result.details ? ` (${result.details})` : ''
+        throw new Error(`${errorMessage}${errorDetails}`)
       }
 
       toast({

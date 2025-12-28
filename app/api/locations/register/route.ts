@@ -8,8 +8,33 @@ import { supabaseServer, getServerUser } from "@/lib/supabase-server"
  */
 export async function POST(request: NextRequest) {
   try {
+    // 0. 檢查 Supabase 環境變數
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+      console.error("[POST /api/locations/register] Missing Supabase environment variables")
+      return NextResponse.json(
+        { 
+          error: "Server configuration error",
+          details: "Missing Supabase environment variables. Please contact the administrator."
+        },
+        { status: 500 }
+      )
+    }
+
     // 1. 檢查登入狀態
-    const user = await getServerUser(request)
+    let user
+    try {
+      user = await getServerUser(request)
+    } catch (error: any) {
+      console.error("[POST /api/locations/register] Error getting user:", error)
+      return NextResponse.json(
+        { 
+          error: "Authentication error",
+          details: error?.message || "Failed to verify user authentication"
+        },
+        { status: 500 }
+      )
+    }
+    
     if (!user) {
       return NextResponse.json(
         { error: "Unauthorized. Please log in." },
@@ -21,9 +46,10 @@ export async function POST(request: NextRequest) {
     let body
     try {
       body = await request.json()
-    } catch (e) {
+    } catch (e: any) {
+      console.error("[POST /api/locations/register] JSON parse error:", e)
       return NextResponse.json(
-        { error: "Invalid JSON in request body" },
+        { error: "Invalid JSON in request body", details: e?.message },
         { status: 400 }
       )
     }
@@ -75,7 +101,19 @@ export async function POST(request: NextRequest) {
     }
 
     // 5. 如果是 Google Places，檢查去重（如果表有 google_place_id 欄位）
-    const supabase = await supabaseServer(request)
+    let supabase
+    try {
+      supabase = await supabaseServer(request)
+    } catch (error: any) {
+      console.error("[POST /api/locations/register] Error creating Supabase client:", error)
+      return NextResponse.json(
+        { 
+          error: "Database connection error",
+          details: error?.message || "Failed to connect to database"
+        },
+        { status: 500 }
+      )
+    }
     
     // 先檢查表結構是否有 google_place_id 欄位
     // 如果 source='google' 且有 google_place_id，檢查是否已存在
@@ -204,10 +242,26 @@ export async function POST(request: NextRequest) {
       },
       { status: 201 }
     )
-  } catch (error) {
+  } catch (error: any) {
     console.error("[POST /api/locations/register] Unexpected error:", error)
+    
+    // 提供更詳細的錯誤訊息以便除錯
+    const errorMessage = error?.message || "Unknown error"
+    const errorStack = error?.stack || ""
+    
+    // 記錄完整的錯誤資訊
+    console.error("[POST /api/locations/register] Error details:", {
+      message: errorMessage,
+      stack: errorStack,
+      name: error?.name,
+    })
+    
     return NextResponse.json(
-      { error: "Internal server error" },
+      { 
+        error: "Internal server error",
+        details: process.env.NODE_ENV === 'development' ? errorMessage : undefined,
+        message: errorMessage,
+      },
       { status: 500 }
     )
   }
