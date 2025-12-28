@@ -7,6 +7,8 @@ import { supabase } from "@/lib/supabaseClient";
 
 type JobRow = {
   id: string;
+  subject_name: string | null;
+  user_tag: string | null;
   created_at: string;
   status: string | null;
   is_sample: boolean;
@@ -42,7 +44,7 @@ export default function SinglePage() {
       const { data, error } = await supabase
         .from("jobs")
         .select(
-          "id, created_at, status, is_sample, start_time, end_time, original_video_r2, result_video_r2"
+          "id, created_at, status, is_sample, subject_name, start_time, end_time, original_video_r2, result_video_r2"
         )
         .order("created_at", { ascending: false });
 
@@ -124,7 +126,9 @@ export default function SinglePage() {
                     <div>
                       <div className="flex items-center gap-2">
                         <div className="text-lg font-semibold">
-                          {j.is_sample ? "Sample Analysis" : "Your Analysis"}
+                          {j.is_sample
+                            ? "Sample Analysis"
+                            : (j.subject_name?.trim() ? j.subject_name.trim() : "Your Analysis")}
                         </div>
                         {j.status && (
                           <span className="rounded-full border border-white/10 bg-black/20 px-2 py-0.5 text-xs text-white/70">
@@ -134,9 +138,7 @@ export default function SinglePage() {
                       </div>
                       <div className="mt-2 text-sm text-white/60">
                         Created: {new Date(j.created_at).toLocaleString()}
-                        {j.start_time != null && j.end_time != null
-                          ? ` · Trim: ${j.start_time}s → ${j.end_time}s`
-                          : ""}
+                        {j.user_tag ? ` · Tag: ${j.user_tag}` : ""}
                       </div>
                     </div>
                     <div className="text-sm text-[#38bdf8]">Open →</div>

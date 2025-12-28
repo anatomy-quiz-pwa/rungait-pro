@@ -10,7 +10,7 @@ export default function UploadPage() {
 
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [userEmail, setUserEmail] = useState<string | null>(null);
-
+  const [subjectName, setSubjectName] = useState("");
   const [userTag, setUserTag] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
@@ -119,6 +119,7 @@ export default function UploadPage() {
         .from("jobs")
         .insert({
           user_email: userEmail,
+          subject_name: subjectName.trim() || null,
           user_tag: userTag || null,
           original_video_r2: objectKey,
           start_time: startTime,
@@ -148,6 +149,17 @@ export default function UploadPage() {
           <div className="w-full border border-zinc-600 bg-zinc-950/60 text-white p-2 rounded-md">
             {userEmail}
           </div>
+        </div>
+
+        <div className="space-y-1">
+          <label className="text-sm text-zinc-400">受測者姓名（可選）</label>
+          <input
+            type="text"
+            placeholder="例如：王小明 / Athlete A"
+            className="w-full border border-zinc-600 bg-zinc-950/60 text-white p-2 rounded-md"
+            value={subjectName}
+            onChange={(e) => setSubjectName(e.target.value)}
+          />
         </div>
 
         <div className="space-y-1">
