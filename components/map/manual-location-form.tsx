@@ -101,7 +101,7 @@ export function ManualLocationForm({ onSuccess }: ManualLocationFormProps) {
     autocompleteRef.current = autocomplete
   }, [])
 
-  // 處理地址選擇
+  // 處理地址/店家選擇
   const onPlaceChanged = useCallback(() => {
     if (!autocompleteRef.current) return
 
@@ -118,31 +118,48 @@ export function ManualLocationForm({ onSuccess }: ManualLocationFormProps) {
     // 設定選中的位置
     setSelectedLocation({ lat, lng })
     
-    // 更新地圖中心
+    // 更新地圖中心並放大
     setMapCenter({ lat, lng })
     
-    // 如果地址欄位是空的，自動填入
-    if (!formData.address.trim() && place.formatted_address) {
+    // 自動填入地址（優先使用 formatted_address）
+    if (place.formatted_address) {
       setFormData(prev => ({ ...prev, address: place.formatted_address || '' }))
+    } else if (place.vicinity) {
+      setFormData(prev => ({ ...prev, address: place.vicinity || '' }))
     }
     
-    // 如果名稱欄位是空的，自動填入
-    if (!formData.name.trim() && place.name) {
+    // 自動填入名稱（如果是店家，使用 name；如果是地址，使用 formatted_address 的第一部分）
+    if (place.name) {
       setFormData(prev => ({ ...prev, name: place.name || '' }))
+    } else if (place.formatted_address) {
+      // 如果是地址，使用地址的第一部分作為名稱
+      const addressParts = place.formatted_address.split(',')
+      setFormData(prev => ({ ...prev, name: addressParts[0] || place.formatted_address || '' }))
+    }
+    
+    // 如果有電話，自動填入聯絡資訊
+    if (place.formatted_phone_number && !formData.contact_info.trim()) {
+      setFormData(prev => ({ ...prev, contact_info: place.formatted_phone_number || '' }))
     }
     
     setError(null)
-  }, [formData.address, formData.name])
+    
+    // 顯示成功訊息
+    toast({
+      title: "位置已設定",
+      description: `已找到：${place.name || place.formatted_address}`,
+    })
+  }, [formData.address, formData.name, formData.contact_info, toast])
 
-  // 處理手動輸入地址並搜尋（使用 Geocoding）
+  // 處理手動輸入地址並搜尋（使用 Geocoding 作為備用方案）
   const handleSearchAddress = useCallback(async () => {
     if (!formData.address.trim()) {
-      setError("請輸入地址")
+      setError("請輸入地址或店家名稱")
       return
     }
 
     if (!isLoaded || !window.google) {
-      setError("Google Maps 尚未載入完成")
+      setError("Google Maps 尚未載入完成，請稍候再試")
       return
     }
 
@@ -151,9 +168,14 @@ export function ManualLocationForm({ onSuccess }: ManualLocationFormProps) {
 
     try {
       const geocoder = new window.google.maps.Geocoder()
+      const searchQuery = formData.address.trim()
       
+      // 使用 Geocoding API 搜尋
       geocoder.geocode(
-        { address: formData.address.trim() },
+        { 
+          address: searchQuery,
+          region: 'tw', // 限制搜尋範圍為台灣
+        },
         (results, status) => {
           setSearchingAddress(false)
           
@@ -168,23 +190,40 @@ export function ManualLocationForm({ onSuccess }: ManualLocationFormProps) {
             // 更新地圖中心
             setMapCenter({ lat, lng })
             
-            // 如果地址與輸入的不同，更新地址欄位（使用格式化後的地址）
-            if (results[0].formatted_address && results[0].formatted_address !== formData.address) {
+            // 更新地址欄位（使用格式化後的地址）
+            if (results[0].formatted_address) {
               setFormData(prev => ({ ...prev, address: results[0].formatted_address }))
             }
             
+            // 如果名稱欄位是空的，使用地址的第一部分作為名稱
+            if (!formData.name.trim() && results[0].formatted_address) {
+              const addressParts = results[0].formatted_address.split(',')
+              setFormData(prev => ({ ...prev, name: addressParts[0] || results[0].formatted_address }))
+            }
+            
             setError(null)
+            
+            toast({
+              title: "位置已找到",
+              description: `已定位到：${results[0].formatted_address}`,
+            })
+          } else if (status === 'ZERO_RESULTS') {
+            setError("找不到此地址或店家，請嘗試：\n1. 使用更完整的地址\n2. 輸入店家名稱\n3. 或直接在地圖上點選位置")
+          } else if (status === 'OVER_QUERY_LIMIT') {
+            setError("搜尋次數已達上限，請稍後再試")
+          } else if (status === 'REQUEST_DENIED') {
+            setError("搜尋請求被拒絕，請檢查 Google Maps API 設定")
           } else {
-            setError(`無法找到地址：${status === 'ZERO_RESULTS' ? '找不到此地址' : '搜尋失敗，請重試'}`)
+            setError(`搜尋失敗：${status}，請重試或直接在地圖上點選位置`)
           }
         }
       )
     } catch (error) {
       setSearchingAddress(false)
-      setError("地址搜尋失敗，請重試")
+      setError("地址搜尋失敗，請重試或直接在地圖上點選位置")
       console.error('Geocoding error:', error)
     }
-  }, [formData.address, isLoaded])
+  }, [formData.address, formData.name, isLoaded, toast])
 
   // 深色主題地圖樣式
   const mapStyles = useMemo(() => [
@@ -321,19 +360,30 @@ export function ManualLocationForm({ onSuccess }: ManualLocationFormProps) {
                   onPlaceChanged={onPlaceChanged}
                   options={{
                     componentRestrictions: { country: 'tw' }, // 限制為台灣
-                    fields: ['geometry', 'formatted_address', 'name', 'place_id'],
+                    fields: [
+                      'geometry', 
+                      'formatted_address', 
+                      'name', 
+                      'place_id',
+                      'vicinity',
+                      'formatted_phone_number',
+                      'website',
+                      'types',
+                    ],
+                    types: ['establishment', 'geocode'], // 允許搜尋店家和地址
                   }}
                 >
                   <Input
                     ref={addressInputRef}
                     type="text"
-                    placeholder="搜尋地址或地點（例如：台北市信義區信義路五段7號）"
+                    placeholder="搜尋地址或店家（例如：台北101、星巴克、台北市信義區信義路五段7號）"
                     className="bg-slate-800 border-slate-700"
                     value={formData.address}
                     onChange={(e) => setFormData({ ...formData, address: e.target.value })}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') {
                         e.preventDefault()
+                        // 如果 Autocomplete 沒有選擇，則使用 Geocoding 搜尋
                         handleSearchAddress()
                       }
                     }}
@@ -354,7 +404,7 @@ export function ManualLocationForm({ onSuccess }: ManualLocationFormProps) {
               </Button>
             </div>
             <p className="text-xs text-slate-500 mt-1">
-              輸入地址後按 Enter 或點擊搜尋按鈕，地圖會自動定位到該位置
+              可以輸入地址或店家名稱（例如：台北101、星巴克、7-11），從下拉選單選擇或按 Enter 搜尋
             </p>
           </div>
         )}
