@@ -47,6 +47,17 @@ export function ManualLocationForm({ onSuccess }: ManualLocationFormProps) {
   const addressInputRef = useRef<HTMLInputElement>(null)
   const [searchingAddress, setSearchingAddress] = useState(false)
 
+  // 開發環境：檢查 API Key 是否載入
+  useEffect(() => {
+    if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
+      if (!apiKey) {
+        console.warn('[ManualLocationForm] ⚠️ NEXT_PUBLIC_GOOGLE_MAPS_API_KEY is not set')
+      } else {
+        console.log('[ManualLocationForm] ✅ Google Maps API Key loaded:', apiKey.substring(0, 10) + '...')
+      }
+    }
+  }, [apiKey])
+
   // 嘗試取得使用者位置
   useEffect(() => {
     if (typeof window !== 'undefined' && navigator.geolocation) {
