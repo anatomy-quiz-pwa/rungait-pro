@@ -142,6 +142,7 @@ export default function HomePage() {
           <FeatureCard
             title="Single Analysis"
             desc="Upload and analyze a single running video with detailed biomechanical assessment"
+            href="/single"
           />
           <FeatureCard
             title="Before/After Comparison"
@@ -161,12 +162,14 @@ export default function HomePage() {
   );
 }
 
-function FeatureCard(props: { title: string; desc: string }) {
-  return (
-    <div className="rounded-2xl border border-white/10 bg-white/5 p-6 shadow-sm">
+function FeatureCard(props: { title: string; desc: string; href?: string }) {
+  const CardBody = (
+    <div className="rounded-2xl border border-white/10 bg-white/5 p-6 shadow-sm hover:bg-white/10 transition">
       <div className="text-xl font-semibold">{props.title}</div>
       <p className="mt-2 text-sm text-white/70">{props.desc}</p>
       <div className="mt-4 text-sm text-[#38bdf8]">Get Started →</div>
     </div>
   );
+
+  return props.href ? <Link href={props.href}>{CardBody}</Link> : CardBody;
 }
