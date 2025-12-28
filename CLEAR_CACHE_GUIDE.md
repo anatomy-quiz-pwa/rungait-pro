@@ -1,74 +1,96 @@
-# 清除快取指南
+# 清除瀏覽器快取指南
 
-## ✅ 已清除的本地快取
+## 🧹 清除瀏覽器快取的步驟
 
-- `.next/` - Next.js 建置快取
-- `node_modules/.cache/` - Node 模組快取
-- `.turbo/` - Turbopack 快取
+### 方法 1：使用無痕模式（最簡單）
 
-## 清除 Vercel 快取
+1. **Chrome/Edge**：
+   - 按 `Ctrl+Shift+N` (Windows) 或 `Cmd+Shift+N` (Mac)
+   - 或點擊右上角三點選單 → 「新增無痕式視窗」
 
-### 方法 1：透過 Vercel Dashboard（推薦）
+2. **Firefox**：
+   - 按 `Ctrl+Shift+P` (Windows) 或 `Cmd+Shift+P` (Mac)
+   - 或點擊右上角三條線選單 → 「新增隱私視窗」
 
-1. 前往 Vercel Dashboard：
-   https://vercel.com/anatomy-quiz-pwas-projects/rungait-pro/deployments
+3. **Safari**：
+   - 按 `Cmd+Shift+N`
+   - 或點擊「檔案」→「新增隱私瀏覽視窗」
 
-2. 找到最新的部署，點擊進入詳情頁
+4. 在無痕視窗中開啟你的網站並測試
 
-3. 點擊右上角的 "..." 按鈕
+### 方法 2：清除快取和 Cookie（Chrome/Edge）
 
-4. 選擇 "Redeploy"
-
-5. **重要**：勾選 "Clear build cache and redeploy"
-
-6. 點擊 "Redeploy" 按鈕
-
-### 方法 2：透過 Vercel CLI
-
-```bash
-# 安裝 Vercel CLI（如果還沒安裝）
-npm i -g vercel
-
-# 登入
-vercel login
-
-# 清除快取並重新部署
-vercel --prod --force
-```
-
-## 清除瀏覽器快取
-
-### Chrome / Edge
-1. 按 `Cmd + Shift + Delete` (Mac) 或 `Ctrl + Shift + Delete` (Windows)
-2. 選擇「快取的圖片和檔案」
-3. 時間範圍選擇「全部時間」
-4. 點擊「清除資料」
-
-### 強制重新整理（不清除快取）
-- Mac: `Cmd + Shift + R`
-- Windows: `Ctrl + Shift + R`
-
-### 開發者工具清除
 1. 按 `F12` 開啟開發者工具
-2. 右鍵點擊重新整理按鈕
+2. 在開發者工具中，點擊右上角的「重新整理」按鈕旁邊的下拉箭頭
 3. 選擇「清除快取並強制重新整理」
+   - 或按 `Ctrl+Shift+R` (Windows) 或 `Cmd+Shift+R` (Mac)
 
-## 驗證快取已清除
+### 方法 3：完整清除快取（Chrome/Edge）
 
-1. 檢查版本標記：右下角應顯示最新的 commit SHA
-2. 訪問 `/__version` 頁面確認建置資訊
-3. 檢查 Network 標籤：確認載入的是最新資源
+1. 按 `Ctrl+Shift+Delete` (Windows) 或 `Cmd+Shift+Delete` (Mac)
+2. 選擇「快取圖片和檔案」
+3. 時間範圍選擇「不限時間」或「過去 24 小時」
+4. 點擊「清除資料」
+5. 重新載入網頁
 
-## 如果問題仍然存在
+### 方法 4：清除特定網站的快取（Chrome/Edge）
 
-1. **檢查 Vercel Build Logs**：
-   - 確認部署的是最新 commit (`c2724c5`)
-   - 確認 Route 列表包含所有路由
+1. 在網址列左側點擊鎖頭圖示或資訊圖示
+2. 點擊「網站設定」
+3. 點擊「清除資料」
+4. 確認清除後重新載入網頁
 
-2. **檢查環境變數**：
-   - 確認 `NEXT_PUBLIC_COMMIT_SHA` 或 `VERCEL_GIT_COMMIT_SHA` 已設定
+## 🔄 強制重新載入網頁
 
-3. **等待 CDN 更新**：
-   - Vercel 的 CDN 可能需要幾分鐘才能更新
-   - 嘗試使用無痕模式訪問網站
+在清除快取後，使用以下方式強制重新載入：
 
+- **Windows**: `Ctrl + F5` 或 `Ctrl + Shift + R`
+- **Mac**: `Cmd + Shift + R`
+
+## ✅ 測試步驟
+
+清除快取後，請測試：
+
+1. **地圖顯示**：
+   - 確認 Google Maps 可以正常載入
+   - 確認沒有「無法載入 Google 地圖」的錯誤訊息
+
+2. **地址搜尋**：
+   - 輸入地址（例如：台北市信義區信義路五段7號）
+   - 確認可以搜尋並定位
+
+3. **店家搜尋**：
+   - 輸入店家名稱（例如：台北101、星巴克）
+   - 確認可以搜尋並顯示在地圖上
+
+4. **表單自動填入**：
+   - 選擇地址或店家後，確認表單自動填入資訊
+
+## 🐛 如果清除快取後仍有問題
+
+1. **檢查 API 狀態**：
+   - 回到 Google Cloud Console
+   - 確認 Geocoding API、Places API、Maps JavaScript API 都是 **Enabled**
+
+2. **檢查瀏覽器 Console**：
+   - 按 `F12` 開啟開發者工具
+   - 查看 Console 標籤的錯誤訊息
+   - 查看 Network 標籤，確認 API 請求是否成功
+
+3. **等待時間**：
+   - API 啟用後可能需要 1-2 分鐘才會完全生效
+   - 如果剛啟用，請稍等片刻再測試
+
+4. **檢查 API Key**：
+   - 確認 Vercel 環境變數 `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` 已正確設定
+   - 如果修改了環境變數，需要重新部署
+
+## 📝 注意事項
+
+- 清除快取不會影響你的登入狀態（如果使用 Cookie 儲存）
+- 無痕模式是最簡單的測試方式，不會影響正常瀏覽
+- 如果使用多個瀏覽器，建議在每個瀏覽器都測試
+
+---
+
+**清除快取後，請重新測試地址搜尋功能！**
