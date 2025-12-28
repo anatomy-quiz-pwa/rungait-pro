@@ -304,6 +304,8 @@ export function ManualLocationForm({ onSuccess }: ManualLocationFormProps) {
                     type="text"
                     placeholder="搜尋地址或地點（例如：台北市信義區信義路五段7號）"
                     className="bg-slate-800 border-slate-700"
+                    value={formData.address}
+                    onChange={(e) => setFormData({ ...formData, address: e.target.value })}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') {
                         e.preventDefault()
