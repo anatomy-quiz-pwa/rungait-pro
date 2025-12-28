@@ -44,7 +44,7 @@ export default function SinglePage() {
       const { data, error } = await supabase
         .from("jobs")
         .select(
-          "id, created_at, status, is_sample, subject_name, start_time, end_time, original_video_r2, result_video_r2"
+          "id, created_at, status, is_sample, subject_name, user_tag, start_time, end_time, original_video_r2, result_video_r2"
         )
         .order("created_at", { ascending: false });
 
