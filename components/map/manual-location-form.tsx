@@ -263,10 +263,24 @@ export function ManualLocationForm({ onSuccess }: ManualLocationFormProps) {
   }
 
   if (loadError) {
+    console.error('[ManualLocationForm] Google Maps load error:', loadError)
     return (
       <Alert className="bg-red-900/30 border-red-600">
         <AlertDescription className="text-red-200">
-          無法載入地圖，請檢查 Google Maps API Key 設定
+          <div className="space-y-2">
+            <p className="font-semibold">無法載入 Google 地圖</p>
+            <p className="text-sm">錯誤訊息：{loadError.message || '未知錯誤'}</p>
+            <p className="text-sm">請檢查：</p>
+            <ul className="text-sm list-disc list-inside space-y-1 ml-2">
+              <li>Vercel 環境變數中是否已設定 NEXT_PUBLIC_GOOGLE_MAPS_API_KEY</li>
+              <li>Google Cloud Console 中是否已啟用 Maps JavaScript API 和 Places API</li>
+              <li>API Key 的 HTTP referrer 限制是否包含你的網域</li>
+              <li>請查看瀏覽器 Console 以獲取詳細錯誤訊息</li>
+            </ul>
+            <p className="text-xs text-slate-400 mt-2">
+              詳細修復指南請參考：GOOGLE_MAPS_ERROR_FIX.md
+            </p>
+          </div>
         </AlertDescription>
       </Alert>
     )
