@@ -32,6 +32,7 @@ export function GooglePlaceSearch({ onSuccess }: GooglePlaceSearchProps) {
   const [error, setError] = useState<string | null>(null)
   const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null)
   const { toast } = useToast()
+  const { user } = useAuth()
 
   const apiKey = typeof window !== 'undefined' 
     ? (process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || '')
@@ -75,6 +76,12 @@ export function GooglePlaceSearch({ onSuccess }: GooglePlaceSearchProps) {
       return
     }
 
+    // 檢查使用者是否已登入
+    if (!user) {
+      setError("請先登入後再送出註冊")
+      return
+    }
+
     setLoading(true)
     setError(null)
 
@@ -93,6 +100,9 @@ export function GooglePlaceSearch({ onSuccess }: GooglePlaceSearchProps) {
           google_place_id: selectedPlace.place_id,
           contact_info: selectedPlace.formatted_phone_number || selectedPlace.website || null,
           description: selectedPlace.website ? `網站: ${selectedPlace.website}` : null,
+          // 傳送 user 資訊以支援模擬認證
+          user_id: user.id,
+          user_email: user.email,
         }),
       })
 
