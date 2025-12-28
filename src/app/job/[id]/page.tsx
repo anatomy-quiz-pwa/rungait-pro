@@ -18,7 +18,21 @@ type JobDetail = {
   end_time: number | null;
 };
 
-export default function JobDetailPage({ params }: { params: { id: string } }) {
+type PageProps = {
+  params: Promise<{ id: string }>;
+};
+
+export default async function JobDetailPage({ params }: PageProps) {
+  const { id } = await params; // ✅ Next.js 16 正確寫法
+
+  return <JobDetailClient id={id} />;
+}
+
+/* -------------------------------------------------- */
+/* Client Component：原本的邏輯全部搬到這裡 */
+/* -------------------------------------------------- */
+
+function JobDetailClient({ id }: { id: string }) {
   const [loading, setLoading] = useState(true);
   const [job, setJob] = useState<JobDetail | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -35,7 +49,7 @@ export default function JobDetailPage({ params }: { params: { id: string } }) {
         .select(
           "id, created_at, status, is_sample, original_video_r2, result_video_r2, result_xlsx_r2, result_png_r2, start_time, end_time"
         )
-        .eq("id", params.id)
+        .eq("id", id)
         .maybeSingle();
 
       if (cancelled) return;
@@ -53,7 +67,7 @@ export default function JobDetailPage({ params }: { params: { id: string } }) {
     return () => {
       cancelled = true;
     };
-  }, [params.id]);
+  }, [id]);
 
   return (
     <div className="min-h-screen bg-[#0b0f14] text-white px-6 py-12">
@@ -62,7 +76,7 @@ export default function JobDetailPage({ params }: { params: { id: string } }) {
           <div>
             <h1 className="text-2xl font-semibold">Analysis Detail</h1>
             <p className="mt-2 text-sm text-white/70">
-              這裡是單筆分析結果頁（後續可放影片播放器、chart、下載報告等）。
+              單筆分析結果頁（後續可串影片、圖表、報告）。
             </p>
           </div>
           <Link href="/single" className="text-sm text-[#38bdf8] hover:underline">
@@ -80,7 +94,7 @@ export default function JobDetailPage({ params }: { params: { id: string } }) {
 
         {!loading && !err && !job && (
           <div className="mt-8 rounded-2xl border border-white/10 bg-white/5 p-6 text-white/70">
-            找不到這筆分析，或你沒有權限觀看（RLS 已擋下）。
+            找不到這筆分析，或你沒有權限觀看。
           </div>
         )}
 
@@ -100,10 +114,10 @@ export default function JobDetailPage({ params }: { params: { id: string } }) {
             <div className="mt-4 grid gap-3 text-sm text-white/80">
               <Row k="Job ID" v={job.id} />
               <Row k="Created" v={new Date(job.created_at).toLocaleString()} />
-              <Row k="Original video (R2)" v={job.original_video_r2 ?? "--"} />
-              <Row k="Result video (R2)" v={job.result_video_r2 ?? "--"} />
-              <Row k="Result xlsx (R2)" v={job.result_xlsx_r2 ?? "--"} />
-              <Row k="Result png (R2)" v={job.result_png_r2 ?? "--"} />
+              <Row k="Original video" v={job.original_video_r2 ?? "--"} />
+              <Row k="Result video" v={job.result_video_r2 ?? "--"} />
+              <Row k="Result xlsx" v={job.result_xlsx_r2 ?? "--"} />
+              <Row k="Result png" v={job.result_png_r2 ?? "--"} />
               <Row
                 k="Trim"
                 v={
@@ -112,11 +126,6 @@ export default function JobDetailPage({ params }: { params: { id: string } }) {
                     : "--"
                 }
               />
-            </div>
-
-            <div className="mt-6 text-sm text-white/60">
-              下一步：我們會把 `result_video_r2` 用你的 `/api/r2-presign` 轉成可播放 URL，
-              或是用你的 `chart`/`result` 頁面串過來。
             </div>
           </div>
         )}
