@@ -156,17 +156,20 @@ export async function POST(request: NextRequest) {
     // 根據 migration 檔案，表結構包含：
     // - owner_user_id, name, lat, lng, address, city, description, contact_info
     // 注意：可能沒有 source、google_place_id 欄位
+    // 先嘗試包含所有欄位，如果失敗會自動移除不存在的欄位
     const insertData: any = {
       owner_user_id: user.id,
       name: name.trim(),
       lat: Number(lat),
       lng: Number(lng),
-      address: body.address || null,
-      city: body.city || null,
-      description: body.description || null,
-      // contact_info 欄位存在於 migration 中，但如果表沒有，會自動處理
-      contact_info: body.contact_info || null,
     }
+    
+    // 可選欄位（如果表有這些欄位就加入）
+    if (body.address) insertData.address = body.address
+    if (body.city) insertData.city = body.city
+    if (body.description) insertData.description = body.description
+    // contact_info 可能不存在（schema cache 問題），先不加入，讓錯誤處理邏輯處理
+    // if (body.contact_info) insertData.contact_info = body.contact_info
 
     // 嘗試加入 source 和 google_place_id（如果表有這些欄位）
     // 如果表沒有，Supabase 會忽略這些欄位
