@@ -44,7 +44,9 @@ export function ManualLocationForm({ onSuccess }: ManualLocationFormProps) {
   })
 
   const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null)
+  const nameAutocompleteRef = useRef<google.maps.places.Autocomplete | null>(null)
   const addressInputRef = useRef<HTMLInputElement>(null)
+  const nameInputRef = useRef<HTMLInputElement>(null)
   const [searchingAddress, setSearchingAddress] = useState(false)
 
   // 開發環境：檢查 API Key 是否載入
@@ -101,12 +103,29 @@ export function ManualLocationForm({ onSuccess }: ManualLocationFormProps) {
     autocompleteRef.current = autocomplete
   }, [])
 
-  // 處理地址/店家選擇
+  // 處理場地名稱 Autocomplete 載入
+  const onNameAutocompleteLoad = useCallback((autocomplete: google.maps.places.Autocomplete) => {
+    nameAutocompleteRef.current = autocomplete
+  }, [])
+
+  // 處理地址/店家選擇（從地址搜尋框）
   const onPlaceChanged = useCallback(() => {
     if (!autocompleteRef.current) return
 
     const place = autocompleteRef.current.getPlace()
-    
+    handlePlaceSelection(place)
+  }, [])
+
+  // 處理場地名稱選擇（從名稱欄位）
+  const onNamePlaceChanged = useCallback(() => {
+    if (!nameAutocompleteRef.current) return
+
+    const place = nameAutocompleteRef.current.getPlace()
+    handlePlaceSelection(place)
+  }, [])
+
+  // 統一的處理地點選擇邏輯
+  const handlePlaceSelection = useCallback((place: google.maps.places.PlaceResult) => {
     if (!place.geometry || !place.geometry.location) {
       setError("無法取得此地點的座標資訊")
       return
@@ -115,7 +134,7 @@ export function ManualLocationForm({ onSuccess }: ManualLocationFormProps) {
     const lat = place.geometry.location.lat()
     const lng = place.geometry.location.lng()
     
-    // 設定選中的位置
+    // 設定選中的位置（這會啟用送出按鈕）
     setSelectedLocation({ lat, lng })
     
     // 更新地圖中心並放大
@@ -149,7 +168,7 @@ export function ManualLocationForm({ onSuccess }: ManualLocationFormProps) {
       title: "位置已設定",
       description: `已找到：${place.name || place.formatted_address}`,
     })
-  }, [formData.address, formData.name, formData.contact_info, toast])
+  }, [formData.contact_info, toast])
 
   // 處理手動輸入地址並搜尋（使用 Geocoding 作為備用方案）
   const handleSearchAddress = useCallback(async () => {
@@ -481,28 +500,90 @@ export function ManualLocationForm({ onSuccess }: ManualLocationFormProps) {
 
           <div className="space-y-2">
             <Label htmlFor="name">場地名稱 *</Label>
-            <Input
-              id="name"
-              value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              required
-              className="bg-slate-800 border-slate-700"
-              placeholder="例如：XX 運動中心"
-            />
+            {isLoaded ? (
+              <Autocomplete
+                onLoad={onNameAutocompleteLoad}
+                onPlaceChanged={onNamePlaceChanged}
+                options={{
+                  componentRestrictions: { country: 'tw' },
+                  fields: [
+                    'geometry',
+                    'formatted_address',
+                    'name',
+                    'place_id',
+                    'vicinity',
+                    'formatted_phone_number',
+                    'website',
+                    'types',
+                  ],
+                  types: ['establishment'], // 只搜尋店家，不搜尋地址
+                }}
+              >
+                <Input
+                  id="name"
+                  ref={nameInputRef}
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  required
+                  className="bg-slate-800 border-slate-700"
+                  placeholder="搜尋店家名稱（例如：星巴克、台北101、XX 運動中心）"
+                />
+              </Autocomplete>
+            ) : (
+              <Input
+                id="name"
+                value={formData.name}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                required
+                className="bg-slate-800 border-slate-700"
+                placeholder="搜尋店家名稱（例如：星巴克、台北101、XX 運動中心）"
+              />
+            )}
+            <p className="text-xs text-slate-500">
+              輸入店家名稱，從下拉選單選擇後會自動定位到地圖
+            </p>
           </div>
 
           <div className="space-y-2">
             <Label htmlFor="address">地址</Label>
-            <Textarea
-              id="address"
-              value={formData.address}
-              onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-              className="bg-slate-800 border-slate-700"
-              placeholder="詳細地址（也可在上方搜尋框輸入地址）"
-              rows={2}
-            />
+            {isLoaded ? (
+              <Autocomplete
+                onLoad={onAutocompleteLoad}
+                onPlaceChanged={onPlaceChanged}
+                options={{
+                  componentRestrictions: { country: 'tw' },
+                  fields: [
+                    'geometry',
+                    'formatted_address',
+                    'name',
+                    'place_id',
+                    'vicinity',
+                    'formatted_phone_number',
+                    'types',
+                  ],
+                  types: ['geocode'], // 只搜尋地址，不搜尋店家
+                }}
+              >
+                <Input
+                  id="address"
+                  value={formData.address}
+                  onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                  className="bg-slate-800 border-slate-700"
+                  placeholder="輸入地址（例如：台北市信義區信義路五段7號）"
+                />
+              </Autocomplete>
+            ) : (
+              <Textarea
+                id="address"
+                value={formData.address}
+                onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                className="bg-slate-800 border-slate-700"
+                placeholder="輸入地址（例如：台北市信義區信義路五段7號）"
+                rows={2}
+              />
+            )}
             <p className="text-xs text-slate-500">
-              提示：您也可以在上方地圖區域的搜尋框輸入地址，系統會自動定位
+              輸入地址，從下拉選單選擇後會自動定位到地圖並設定位置
             </p>
           </div>
 
