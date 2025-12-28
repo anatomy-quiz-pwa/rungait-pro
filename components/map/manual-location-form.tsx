@@ -509,7 +509,15 @@ export function ManualLocationForm({ onSuccess }: ManualLocationFormProps) {
         <form onSubmit={handleSubmit} className="space-y-4">
           {error && (
             <Alert className="bg-red-900/30 border-red-600">
-              <AlertDescription className="text-red-200">{error}</AlertDescription>
+              <AlertDescription className="text-red-200">
+                <div className="space-y-2">
+                  <p className="font-semibold">提交失敗</p>
+                  <p className="text-sm whitespace-pre-line">{error}</p>
+                  <p className="text-xs text-slate-400 mt-2">
+                    提示：請檢查瀏覽器 Console（F12）以獲取詳細錯誤訊息
+                  </p>
+                </div>
+              </AlertDescription>
             </Alert>
           )}
 
