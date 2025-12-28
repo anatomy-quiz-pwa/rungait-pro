@@ -324,8 +324,18 @@ export function ManualLocationForm({ onSuccess }: ManualLocationFormProps) {
       if (!response.ok) {
         // 顯示更詳細的錯誤訊息
         const errorMessage = result.error || result.message || '提交失敗'
-        const errorDetails = result.details ? ` (${result.details})` : ''
-        throw new Error(`${errorMessage}${errorDetails}`)
+        const errorDetails = result.details ? `\n詳細資訊：${result.details}` : ''
+        const fullErrorMessage = `${errorMessage}${errorDetails}`
+        
+        console.error('[ManualLocationForm] API Error:', {
+          status: response.status,
+          error: result.error,
+          message: result.message,
+          details: result.details,
+          fullResult: result,
+        })
+        
+        throw new Error(fullErrorMessage)
       }
 
       toast({
@@ -337,7 +347,12 @@ export function ManualLocationForm({ onSuccess }: ManualLocationFormProps) {
     } catch (error) {
       const message = error instanceof Error ? error.message : "提交失敗，請重試"
       setError(message)
-      console.error('Location registration error:', error)
+      console.error('[ManualLocationForm] Location registration error:', error)
+      
+      // 如果是網路錯誤，提供更詳細的訊息
+      if (error instanceof TypeError && error.message.includes('fetch')) {
+        setError("網路連線錯誤，請檢查網路連線後重試")
+      }
     } finally {
       setLoading(false)
     }

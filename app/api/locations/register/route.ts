@@ -248,19 +248,27 @@ export async function POST(request: NextRequest) {
     // 提供更詳細的錯誤訊息以便除錯
     const errorMessage = error?.message || "Unknown error"
     const errorStack = error?.stack || ""
+    const errorName = error?.name || "Error"
     
     // 記錄完整的錯誤資訊
     console.error("[POST /api/locations/register] Error details:", {
+      name: errorName,
       message: errorMessage,
       stack: errorStack,
-      name: error?.name,
+      code: error?.code,
+      cause: error?.cause,
     })
+    
+    // 在開發環境顯示完整錯誤，生產環境只顯示一般訊息
+    const isDevelopment = process.env.NODE_ENV === 'development'
     
     return NextResponse.json(
       { 
         error: "Internal server error",
-        details: process.env.NODE_ENV === 'development' ? errorMessage : undefined,
         message: errorMessage,
+        details: isDevelopment ? errorMessage : "伺服器發生錯誤，請稍後再試或聯絡管理員",
+        // 只在開發環境提供 stack trace
+        ...(isDevelopment && { stack: errorStack }),
       },
       { status: 500 }
     )
