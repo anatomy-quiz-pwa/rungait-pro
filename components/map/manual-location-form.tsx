@@ -212,8 +212,20 @@ export function ManualLocationForm({ onSuccess }: ManualLocationFormProps) {
           } else if (status === 'OVER_QUERY_LIMIT') {
             setError("搜尋次數已達上限，請稍後再試")
           } else if (status === 'REQUEST_DENIED') {
-            setError("搜尋請求被拒絕，請檢查 Google Maps API 設定")
+            console.error('[Geocoding] REQUEST_DENIED - 可能的原因：', {
+              apiKey: apiKey ? `${apiKey.substring(0, 10)}...` : '未設定',
+              isLoaded,
+              hasGoogle: !!window.google,
+            })
+            setError(
+              "搜尋請求被拒絕。請檢查：\n" +
+              "1. Google Cloud Console 中是否已啟用 Geocoding API\n" +
+              "2. API Key 是否有 HTTP referrer 限制（需包含你的網域）\n" +
+              "3. API Key 是否有效且未被停用\n" +
+              "4. 請查看瀏覽器 Console 以獲取詳細錯誤訊息"
+            )
           } else {
+            console.error('[Geocoding] Error status:', status)
             setError(`搜尋失敗：${status}，請重試或直接在地圖上點選位置`)
           }
         }
