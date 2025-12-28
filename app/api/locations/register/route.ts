@@ -153,8 +153,9 @@ export async function POST(request: NextRequest) {
     }
 
     // 6. 準備插入資料
-    // 注意：根據實際表結構，可能沒有 source、google_place_id、status 欄位
-    // 如果沒有，這些欄位會被忽略
+    // 根據 migration 檔案，表結構包含：
+    // - owner_user_id, name, lat, lng, address, city, description, contact_info
+    // 注意：可能沒有 source、google_place_id 欄位
     const insertData: any = {
       owner_user_id: user.id,
       name: name.trim(),
@@ -163,6 +164,7 @@ export async function POST(request: NextRequest) {
       address: body.address || null,
       city: body.city || null,
       description: body.description || null,
+      // contact_info 欄位存在於 migration 中，但如果表沒有，會自動處理
       contact_info: body.contact_info || null,
     }
 
