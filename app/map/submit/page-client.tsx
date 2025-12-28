@@ -18,12 +18,24 @@ export default function SubmitPageClient() {
 
   useEffect(() => {
     if (!user) {
-      router.push("/")
+      console.log('[SubmitPageClient] User not logged in, redirecting to home')
+      // 延遲一下再重定向，讓用戶看到提示
+      const timer = setTimeout(() => {
+        router.push("/")
+      }, 100)
+      return () => clearTimeout(timer)
     }
   }, [user, router])
 
   if (!user) {
-    return null
+    return (
+      <div className="min-h-screen bg-[#0B0F12] flex items-center justify-center">
+        <div className="text-center text-slate-400">
+          <p>請先登入以註冊場地...</p>
+          <p className="text-sm mt-2">正在導向到首頁...</p>
+        </div>
+      </div>
+    )
   }
 
   const handleSuccess = () => {
