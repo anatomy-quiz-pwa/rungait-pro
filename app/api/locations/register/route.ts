@@ -198,18 +198,27 @@ export async function POST(request: NextRequest) {
         )
       }
 
-      // 檢查是否為欄位不存在的錯誤
-      if (error.message.includes("column") || error.message.includes("does not exist")) {
-        // 移除不存在的欄位，重試插入
+      // 檢查是否為欄位不存在的錯誤（包括 schema cache 錯誤）
+      if (error.message.includes("column") || error.message.includes("does not exist") || error.message.includes("schema cache")) {
+        console.warn("[POST /api/locations/register] Column error detected, retrying with minimal fields:", error.message)
+        
+        // 移除可能不存在的欄位，重試插入
+        // 只保留 migration 檔案中確認存在的核心欄位
         const cleanedData: any = {
           owner_user_id: user.id,
           name: name.trim(),
           lat: Number(lat),
           lng: Number(lng),
-          address: body.address || null,
-          city: body.city || null,
-          description: body.description || null,
-          contact_info: body.contact_info || null,
+        }
+        
+        // 只加入確認存在的可選欄位
+        if (body.address) cleanedData.address = body.address
+        if (body.city) cleanedData.city = body.city
+        if (body.description) cleanedData.description = body.description
+        // 如果 contact_info 欄位不存在，暫時跳過它
+        // 如果錯誤訊息特別提到 contact_info，就不加入它
+        if (!error.message.includes("contact_info")) {
+          if (body.contact_info) cleanedData.contact_info = body.contact_info
         }
 
         const { data: retryData, error: retryError } = await supabase
@@ -219,8 +228,13 @@ export async function POST(request: NextRequest) {
           .single()
 
         if (retryError) {
+          console.error("[POST /api/locations/register] Retry failed:", retryError)
           return NextResponse.json(
-            { error: "Failed to create location", details: retryError.message },
+            { 
+              error: "Failed to create location", 
+              details: retryError.message,
+              hint: "Please check the database schema matches the migration file. You may need to run the migration SQL in Supabase."
+            },
             { status: 500 }
           )
         }
@@ -229,7 +243,7 @@ export async function POST(request: NextRequest) {
           {
             ok: true,
             id: retryData.id,
-            message: "Location created successfully",
+            message: "Location created successfully" + (error.message.includes("contact_info") ? " (contact_info field was omitted)" : ""),
             data: retryData,
           },
           { status: 201 }
