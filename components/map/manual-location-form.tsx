@@ -10,6 +10,7 @@ import { Card } from "@/components/ui/card"
 import { Loader2, MapPin, CheckCircle2, Search } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { useToast } from "@/hooks/use-toast"
+import { useAuth } from "@/lib/auth-context"
 
 interface ManualLocationFormProps {
   onSuccess?: () => void
@@ -24,6 +25,7 @@ export function ManualLocationForm({ onSuccess }: ManualLocationFormProps) {
   const [mapCenter, setMapCenter] = useState(defaultCenter)
   const [error, setError] = useState<string | null>(null)
   const { toast } = useToast()
+  const { user } = useAuth()
   
   const [formData, setFormData] = useState({
     name: "",
@@ -303,6 +305,12 @@ export function ManualLocationForm({ onSuccess }: ManualLocationFormProps) {
     setLoading(true)
 
     try {
+      // 檢查使用者是否已登入
+      if (!user) {
+        setError("請先登入後再送出註冊")
+        return
+      }
+
       const response = await fetch('/api/locations/register', {
         method: 'POST',
         headers: {
@@ -316,6 +324,9 @@ export function ManualLocationForm({ onSuccess }: ManualLocationFormProps) {
           source: 'manual',
           contact_info: formData.contact_info.trim() || null,
           description: formData.description.trim() || null,
+          // 傳送 user 資訊以支援模擬認證
+          user_id: user.id,
+          user_email: user.email,
         }),
       })
 

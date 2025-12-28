@@ -9,6 +9,7 @@ import { Card } from "@/components/ui/card"
 import { Loader2, MapPin, CheckCircle2, ExternalLink } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { useToast } from "@/hooks/use-toast"
+import { useAuth } from "@/lib/auth-context"
 
 interface GooglePlaceSearchProps {
   onSuccess?: () => void
