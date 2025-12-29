@@ -648,123 +648,142 @@ export default function JobResultView({
         )}
 
         {job.status === "done" ? (
-          <div className="space-y-6">
-            {/* 影片 */}
-            {job.result_video_r2 && base && (
-              <video
-                ref={videoRef}
-                controls
-                src={buildR2Url(job.result_video_r2)}
-                className="w-full rounded-lg shadow-md border border-zinc-700"
-              />
-            )}
-
-            {/* Series checkbox */}
-            {chartJson && (
-              <div className="flex flex-wrap gap-4 text-sm text-left">
-                {chartJson.series.map((s) => (
-                  <label key={s.id} className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={showSeries[s.id] !== false}
-                      onChange={() =>
-                        setShowSeries((prev) => ({
-                          ...prev,
-                          [s.id]: !(prev[s.id] !== false),
-                        }))
-                      }
+            <div className="mt-6">
+                {/* 兩欄：md 以上左右並列；小螢幕自動上下 */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
+                {/* 左欄：影片 */}
+                <div className="space-y-4">
+                    {job.result_video_r2 && base ? (
+                    <video
+                        ref={videoRef}
+                        controls
+                        src={buildR2Url(job.result_video_r2)}
+                        className="w-full rounded-lg shadow-md border border-zinc-700"
                     />
-                    {s.label}
-                  </label>
-                ))}
-              </div>
-            )}
+                    ) : (
+                    <div className="rounded-lg border border-zinc-700 bg-black/10 dark:bg-white/5 p-4 text-zinc-400">
+                        尚未有影片可預覽
+                    </div>
+                    )}
+                </div>
 
-            {/* 事件 checkbox */}
-            {chartJson && (
-              <div className="flex flex-wrap gap-4 text-sm text-left">
-                <label className="flex items-center gap-2">
-                  <input type="checkbox" checked={showIC} onChange={() => setShowIC((v) => !v)} /> IC
-                </label>
-                <label className="flex items-center gap-2">
-                  <input type="checkbox" checked={showTO} onChange={() => setShowTO((v) => !v)} /> TO
-                </label>
-                <label className="flex items-center gap-2">
-                  <input type="checkbox" checked={showMs} onChange={() => setShowMs((v) => !v)} />{" "}
-                  M-stance
-                </label>
-                <label className="flex items-center gap-2">
-                  <input type="checkbox" checked={showMw} onChange={() => setShowMw((v) => !v)} />{" "}
-                  M-swing
-                </label>
-              </div>
-            )}
+                {/* 右欄：checkbox + 圖表 + 幀控制 + 下載 */}
+                <div className="space-y-4">
+                    {/* Series checkbox */}
+                    {chartJson && (
+                    <div className="rounded-lg border border-zinc-700 bg-black/10 dark:bg-white/5 p-3">
+                        <div className="text-sm font-semibold mb-2 text-left">曲線顯示</div>
+                        <div className="flex flex-wrap gap-4 text-sm text-left">
+                        {chartJson.series.map((s) => (
+                            <label key={s.id} className="flex items-center gap-2">
+                            <input
+                                type="checkbox"
+                                checked={showSeries[s.id] !== false}
+                                onChange={() =>
+                                setShowSeries((prev) => ({
+                                    ...prev,
+                                    [s.id]: !(prev[s.id] !== false),
+                                }))
+                                }
+                            />
+                            {s.label}
+                            </label>
+                        ))}
+                        </div>
+                    </div>
+                    )}
 
-            {/* 圖表 */}
-            {pluginsReady && chartJson && chartJsData && chartJsOptions ? (
-              <div className="h-72 sm:h-80 w-full bg-black/10 dark:bg-white/5 rounded-lg p-2 border border-zinc-700">
-                <Line
-                  ref={chartRef}
-                  data={chartJsData as any}
-                  options={chartJsOptions as any}
-                  plugins={[
-                    ...(annotationPlugin ? [annotationPlugin] : []),
-                    ...(zoomPlugin ? [zoomPlugin] : []),
-                    centerPointerPlugin,
-                  ]}
-                />
-                <p className="mt-2 text-xs text-zinc-400 text-left">
-                  中央橘線＝播放指針。平移/縮放後，影片會跳到指針所指幀。手機：雙指縮放、拖曳平移；桌機：Ctrl+滾輪縮放、拖曳平移；點擊圖表可跳轉。
-                </p>
-              </div>
-            ) : (
-              <p className="text-zinc-400">
-                {pluginsReady ? "尚未取得圖表資料（chart.json）。" : "載入圖表外掛中…"}
-              </p>
-            )}
+                    {/* 事件 checkbox */}
+                    {chartJson && (
+                    <div className="rounded-lg border border-zinc-700 bg-black/10 dark:bg-white/5 p-3">
+                        <div className="text-sm font-semibold mb-2 text-left">事件顯示</div>
+                        <div className="flex flex-wrap gap-4 text-sm text-left">
+                        <label className="flex items-center gap-2">
+                            <input type="checkbox" checked={showIC} onChange={() => setShowIC((v) => !v)} /> IC
+                        </label>
+                        <label className="flex items-center gap-2">
+                            <input type="checkbox" checked={showTO} onChange={() => setShowTO((v) => !v)} /> TO
+                        </label>
+                        <label className="flex items-center gap-2">
+                            <input type="checkbox" checked={showMs} onChange={() => setShowMs((v) => !v)} /> M-stance
+                        </label>
+                        <label className="flex items-center gap-2">
+                            <input type="checkbox" checked={showMw} onChange={() => setShowMw((v) => !v)} /> M-swing
+                        </label>
+                        </div>
+                    </div>
+                    )}
 
-            {/* 幀控制按鈕 */}
-            {chartJson && (
-              <div className="flex items-center justify-center gap-4 mt-3">
-                <button
-                  onClick={() => stepFrame(-1)}
-                  className="px-3 py-2 bg-zinc-700 text-white rounded hover:bg-zinc-600"
-                >
-                  ← 上一幀
-                </button>
-                <span className="text-sm text-zinc-400">目前幀：{currentFrame}</span>
-                <button
-                  onClick={() => stepFrame(+1)}
-                  className="px-3 py-2 bg-zinc-700 text-white rounded hover:bg-zinc-600"
-                >
-                  下一幀 →
-                </button>
-              </div>
-            )}
+                    {/* 圖表 */}
+                    {pluginsReady && chartJson && chartJsData && chartJsOptions ? (
+                    <div className="rounded-lg border border-zinc-700 bg-black/10 dark:bg-white/5 p-2">
+                        <div className="h-72 sm:h-80 w-full">
+                        <Line
+                            ref={chartRef}
+                            data={chartJsData as any}
+                            options={chartJsOptions as any}
+                            plugins={[
+                            ...(annotationPlugin ? [annotationPlugin] : []),
+                            ...(zoomPlugin ? [zoomPlugin] : []),
+                            centerPointerPlugin,
+                            ]}
+                        />
+                        </div>
+                        <p className="mt-2 text-xs text-zinc-400 text-left">
+                        中央橘線＝播放指針。平移/縮放後，影片會跳到指針所指幀。
+                        手機：雙指縮放、拖曳平移；桌機：Ctrl+滾輪縮放、拖曳平移；點擊圖表可跳轉。
+                        </p>
+                    </div>
+                    ) : (
+                    <div className="rounded-lg border border-zinc-700 bg-black/10 dark:bg-white/5 p-4 text-zinc-400">
+                        {pluginsReady ? "尚未取得圖表資料（chart.json）。" : "載入圖表外掛中…"}
+                    </div>
+                    )}
 
-            {/* 下載按鈕 */}
-            <div className="flex gap-4 flex-wrap mt-4">
-              {job.result_png_r2 && base && (
-                <a
-                  href={buildR2Url(job.result_png_r2)}
-                  download
-                  className={`${baseBtn} bg-blue-600 hover:bg-blue-700 text-base w-auto px-4 py-2`}
-                >
-                  下載 PNG
-                </a>
-              )}
-              {job.result_xlsx_r2 && base && (
-                <a
-                  href={buildR2Url(job.result_xlsx_r2)}
-                  download
-                  className={`${baseBtn} bg-green-600 hover:bg-green-700 text-base w-auto px-4 py-2`}
-                >
-                  下載 Excel
-                </a>
-              )}
+                    {/* 幀控制按鈕 */}
+                    {chartJson && (
+                    <div className="flex items-center justify-center gap-4">
+                        <button
+                        onClick={() => stepFrame(-1)}
+                        className="px-3 py-2 bg-zinc-700 text-white rounded hover:bg-zinc-600"
+                        >
+                        ← 上一幀
+                        </button>
+                        <span className="text-sm text-zinc-400">目前幀：{currentFrame}</span>
+                        <button
+                        onClick={() => stepFrame(+1)}
+                        className="px-3 py-2 bg-zinc-700 text-white rounded hover:bg-zinc-600"
+                        >
+                        下一幀 →
+                        </button>
+                    </div>
+                    )}
+
+                    {/* 下載按鈕 */}
+                    <div className="flex gap-3 flex-wrap">
+                    {job.result_png_r2 && base && (
+                        <a
+                        href={buildR2Url(job.result_png_r2)}
+                        download
+                        className={`${baseBtn} bg-blue-600 hover:bg-blue-700 text-base w-auto px-4 py-2`}
+                        >
+                        下載 PNG
+                        </a>
+                    )}
+                    {job.result_xlsx_r2 && base && (
+                        <a
+                        href={buildR2Url(job.result_xlsx_r2)}
+                        download
+                        className={`${baseBtn} bg-green-600 hover:bg-green-700 text-base w-auto px-4 py-2`}
+                        >
+                        下載 Excel
+                        </a>
+                    )}
+                    </div>
+                </div>
+                </div>
             </div>
-          </div>
-        ) : job.status === "failed" ? (
+            ) : job.status === "failed" ? (
           <p className="text-red-400">❌ 分析失敗：{job.error_msg ?? "請重新上傳影片。"}</p>
         ) : (
           <p className="text-yellow-400">⏳ 分析中，請稍後再試。</p>
