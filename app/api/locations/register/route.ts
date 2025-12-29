@@ -166,20 +166,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 5. 如果是 Google Places，檢查去重（如果表有 google_place_id 欄位）
-    let supabase
-    try {
-      supabase = await supabaseServer(request)
-    } catch (error: any) {
-      console.error("[POST /api/locations/register] Error creating Supabase client:", error)
-      return NextResponse.json(
-        { 
-          error: "Database connection error",
-          details: error?.message || "Failed to connect to database"
-        },
-        { status: 500 }
-      )
-    }
-    
+    // 注意：supabase client 已在步驟 2 建立
     // 先檢查表結構是否有 google_place_id 欄位
     // 如果 source='google' 且有 google_place_id，檢查是否已存在
     if (source === 'google' && body.google_place_id) {
