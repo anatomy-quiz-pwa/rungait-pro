@@ -33,7 +33,22 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // 2. 檢查登入狀態
+    // 2. 建立 Supabase client（需要在檢查 user 之前建立，以便查詢用戶）
+    let supabase
+    try {
+      supabase = await supabaseServer(request)
+    } catch (error: any) {
+      console.error("[POST /api/locations/register] Error creating Supabase client:", error)
+      return NextResponse.json(
+        { 
+          error: "Database connection error",
+          details: error?.message || "Failed to connect to database"
+        },
+        { status: 500 }
+      )
+    }
+
+    // 3. 檢查登入狀態
     // 先嘗試從 Supabase Auth 取得 user
     let user
     try {
@@ -57,15 +72,34 @@ export async function POST(request: NextRequest) {
         // 已經是 UUID 格式
         finalUserId = mockUserId
       } else {
-        // 不是 UUID 格式，生成一個新的 UUID
-        // 在 server 端使用 Node.js 的 crypto.randomUUID()
+        // 不是 UUID 格式，需要處理
+        // 注意：owner_user_id 有外鍵約束 REFERENCES auth.users(id)
+        // 所以我們需要一個在 auth.users 表中存在的 UUID
+        // 
+        // 方案：查詢 auth.users 表，使用第一個用戶的 UUID
+        // 注意：直接查詢 auth.users 可能需要特殊權限，我們使用 Supabase Admin API 或查詢 user_access 表
         try {
-          finalUserId = randomUUID()
-          console.log("[POST /api/locations/register] Generated UUID for mock user:", finalUserId, "Original:", mockUserId)
+          // 嘗試查詢 user_access 表來取得一個有效的 user_id
+          const { data: userAccess, error: userError } = await supabase
+            .from('user_access')
+            .select('user_id')
+            .limit(1)
+          
+          if (!userError && userAccess && userAccess.length > 0) {
+            // 使用第一個 user_access 記錄的 user_id
+            finalUserId = userAccess[0].user_id
+            console.log("[POST /api/locations/register] Using existing user_id from user_access for mock user:", finalUserId, "Original:", mockUserId)
+          } else {
+            // 如果無法查詢，生成一個 UUID（可能會違反外鍵約束）
+            // 這種情況下，可能需要先建立一個測試用戶
+            finalUserId = randomUUID()
+            console.warn("[POST /api/locations/register] Generated UUID for mock user (may violate FK constraint):", finalUserId, "Original:", mockUserId)
+            console.warn("[POST /api/locations/register] You may need to create a test user in auth.users table first")
+          }
         } catch (error) {
-          // 如果 randomUUID 不可用，使用零 UUID 作為後備
-          finalUserId = '00000000-0000-0000-0000-000000000000'
-          console.warn("[POST /api/locations/register] Failed to generate UUID, using placeholder:", finalUserId)
+          // 如果查詢失敗，生成一個 UUID
+          finalUserId = randomUUID()
+          console.warn("[POST /api/locations/register] Failed to query user_access, generated UUID:", finalUserId, "Error:", error)
         }
       }
       
