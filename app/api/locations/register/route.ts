@@ -243,11 +243,20 @@ export async function POST(request: NextRequest) {
       console.error("[POST /api/locations/register] Supabase error:", error)
 
       // 檢查是否為權限錯誤（RLS 拒絕）
-      if (error.code === "42501" || error.message.includes("permission") || error.message.includes("policy")) {
+      if (error.code === "42501" || error.message.includes("permission") || error.message.includes("policy") || error.message.includes("row-level security") || error.message.includes("violates row-level security")) {
+        console.error("[POST /api/locations/register] RLS policy violation:", error.message)
+        console.error("[POST /api/locations/register] User ID used:", user.id)
+        console.error("[POST /api/locations/register] Please check:")
+        console.error("  1. user_access table has a record for user_id:", user.id)
+        console.error("  2. can_upload = true for that user")
+        console.error("  3. RLS policy allows INSERT for this user")
+        console.error("  4. If using mock authentication, you may need to update RLS policy (see FIX_RLS_POLICY.sql)")
+        
         return NextResponse.json(
           { 
-            error: "Forbidden. You do not have permission to create locations. Please ensure can_upload is enabled in your account.",
-            details: "RLS policy violation: user_access.can_upload must be true"
+            error: "Forbidden. You do not have permission to create locations.",
+            details: "RLS policy violation: " + error.message,
+            hint: "Please ensure the user exists in user_access table with can_upload = true. If using mock authentication, you may need to update the RLS policy (see FIX_RLS_POLICY.sql file)"
           },
           { status: 403 }
         )
