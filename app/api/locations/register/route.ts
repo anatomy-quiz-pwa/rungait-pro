@@ -227,6 +227,7 @@ export async function POST(request: NextRequest) {
     // - owner_user_id, name, lat, lng, address, city, description, contact_info
     // 注意：可能沒有 source、google_place_id 欄位
     // 先嘗試包含所有欄位，如果失敗會自動移除不存在的欄位
+    console.log("[POST /api/locations/register] 📝 Preparing insert data with owner_user_id:", user.id)
     const insertData: any = {
       owner_user_id: user.id,
       name: name.trim(),
@@ -251,6 +252,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 7. 插入資料（RLS 會自動檢查 can_upload）
+    console.log("[POST /api/locations/register] 💾 Attempting to insert data:", JSON.stringify(insertData, null, 2))
     const { data, error } = await supabase
       .from("curved_treadmill_locations")
       .insert(insertData)
@@ -258,7 +260,11 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (error) {
-      console.error("[POST /api/locations/register] Supabase error:", error)
+      console.error("[POST /api/locations/register] ❌ Supabase error:", error)
+      console.error("[POST /api/locations/register] Error code:", error.code)
+      console.error("[POST /api/locations/register] Error message:", error.message)
+      console.error("[POST /api/locations/register] Error details:", error.details)
+      console.error("[POST /api/locations/register] Error hint:", error.hint)
 
             // 檢查是否為權限錯誤（RLS 拒絕）
             if (error.code === "42501" || error.message.includes("permission") || error.message.includes("policy") || error.message.includes("row-level security") || error.message.includes("violates row-level security")) {
