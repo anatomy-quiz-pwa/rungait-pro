@@ -650,16 +650,16 @@ export default function JobResultView({
         {job.status === "done" ? (
             <div className="mt-6">
                 {/* 兩欄：md 以上左右並列；小螢幕自動上下 */}
-                <div className="grid grid-cols-1 md:grid-cols-6 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-6 gap-6 items-start">
 
                 {/* 左欄：影片 */}
-                <div className="md:col-span-2">
+                <div className="md:col-span-2 flex justify-center">
                     {job.result_video_r2 && base ? (
                     <video
                         ref={videoRef}
                         controls
                         src={buildR2Url(job.result_video_r2)}
-                        className="w-full rounded-lg shadow-md border border-zinc-700"
+                        className="w-full max-w-[420px] aspect-video rounded-lg border border-zinc-700"
                     />
                     ) : (
                     <div className="rounded-lg border border-zinc-700 bg-black/10 dark:bg-white/5 p-4 text-zinc-400">
@@ -669,7 +669,7 @@ export default function JobResultView({
                 </div>
 
                 {/* 右欄：checkbox + 圖表 + 幀控制 + 下載 */}
-                <div className="md:col-span-4">
+                <div className="md:col-span-4 space-y-4">
                     {/* Series checkbox */}
                     {chartJson && (
                     <div className="rounded-lg border border-zinc-700 bg-black/10 dark:bg-white/5 p-3">
