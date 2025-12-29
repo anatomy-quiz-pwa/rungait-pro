@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { supabaseServer, getServerUser } from "@/lib/supabase-server"
+import { randomUUID } from "crypto"
 
 /**
  * POST /api/locations/register
@@ -45,11 +46,34 @@ export async function POST(request: NextRequest) {
     // 如果 Supabase Auth 沒有 user，嘗試從 request body 取得（模擬認證系統）
     if (!user && body.user_id) {
       // 使用模擬認證系統，從 body 取得 user_id
+      // 注意：模擬認證的 user_id 可能不是 UUID 格式，需要轉換
+      const mockUserId = body.user_id
+      
+      // 檢查是否為 UUID 格式
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+      let finalUserId: string
+      
+      if (uuidRegex.test(mockUserId)) {
+        // 已經是 UUID 格式
+        finalUserId = mockUserId
+      } else {
+        // 不是 UUID 格式，生成一個新的 UUID
+        // 在 server 端使用 Node.js 的 crypto.randomUUID()
+        try {
+          finalUserId = randomUUID()
+          console.log("[POST /api/locations/register] Generated UUID for mock user:", finalUserId, "Original:", mockUserId)
+        } catch (error) {
+          // 如果 randomUUID 不可用，使用零 UUID 作為後備
+          finalUserId = '00000000-0000-0000-0000-000000000000'
+          console.warn("[POST /api/locations/register] Failed to generate UUID, using placeholder:", finalUserId)
+        }
+      }
+      
       user = {
-        id: body.user_id,
+        id: finalUserId,
         email: body.user_email || 'unknown@example.com',
       } as any
-      console.log("[POST /api/locations/register] Using mock authentication, user_id:", body.user_id)
+      console.log("[POST /api/locations/register] Using mock authentication, user_id:", finalUserId)
     }
     
     // 如果還是沒有 user，回傳錯誤
