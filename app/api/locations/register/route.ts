@@ -81,6 +81,7 @@ export async function POST(request: NextRequest) {
         try {
           // 嘗試查詢 user_access 表來取得一個有效的 user_id（且 can_upload = true）
           // 選擇第一個有上傳權限的用戶，確保與其他表（如 jobs）使用相同的 user_id
+          console.log("[POST /api/locations/register] 🔍 Querying user_access table for users with can_upload = true...")
           const { data: userAccess, error: userError } = await supabase
             .from('user_access')
             .select('user_id, can_upload, display_name')
@@ -88,16 +89,31 @@ export async function POST(request: NextRequest) {
             .order('created_at', { ascending: false })  // 優先選擇最新的用戶
             .limit(1)
           
+          if (userError) {
+            console.error("[POST /api/locations/register] ❌ Error querying user_access:", userError)
+          } else {
+            console.log("[POST /api/locations/register] 📊 Query result:", { count: userAccess?.length || 0, users: userAccess })
+          }
+          
           if (!userError && userAccess && userAccess.length > 0) {
             // 使用第一個 user_access 記錄的 user_id（且 can_upload = true）
             // 優先選擇 can_upload = true 的記錄
             const userWithUpload = userAccess.find((ua: any) => ua.can_upload === true) || userAccess[0]
             finalUserId = userWithUpload.user_id
-            console.log("[POST /api/locations/register] Using existing user_id from user_access for mock user:", finalUserId, "Original:", mockUserId, "can_upload:", userWithUpload.can_upload, "display_name:", userWithUpload.display_name || 'N/A')
+            console.log("[POST /api/locations/register] ✅ Using existing user_id from user_access for mock user:", finalUserId, "Original:", mockUserId, "can_upload:", userWithUpload.can_upload, "display_name:", userWithUpload.display_name || 'N/A')
             
             // 如果 can_upload 不是 true，警告用戶
             if (userWithUpload.can_upload !== true) {
-              console.warn("[POST /api/locations/register] WARNING: Selected user does not have can_upload = true. Insert may fail due to RLS policy.")
+              console.error("[POST /api/locations/register] ❌ ERROR: Selected user does not have can_upload = true. Insert will fail due to RLS policy.")
+              console.error("[POST /api/locations/register] Selected user:", userWithUpload)
+              return NextResponse.json(
+                { 
+                  error: "User does not have upload permission",
+                  details: `Selected user_id ${finalUserId} has can_upload = false. Please ensure user_access table has a record with can_upload = true.`,
+                  selected_user: userWithUpload
+                },
+                { status: 403 }
+              )
             }
           } else {
             // 如果無法查詢，生成一個 UUID（可能會違反外鍵約束和 RLS policy）
@@ -244,9 +260,27 @@ export async function POST(request: NextRequest) {
     if (error) {
       console.error("[POST /api/locations/register] Supabase error:", error)
 
-      // 檢查是否為權限錯誤（RLS 拒絕）
-      if (error.code === "42501" || error.message.includes("permission") || error.message.includes("policy") || error.message.includes("row-level security") || error.message.includes("violates row-level security")) {
-        console.error("[POST /api/locations/register] RLS policy violation:", error.message)
+            // 檢查是否為權限錯誤（RLS 拒絕）
+            if (error.code === "42501" || error.message.includes("permission") || error.message.includes("policy") || error.message.includes("row-level security") || error.message.includes("violates row-level security")) {
+              console.error("[POST /api/locations/register] ❌ RLS policy violation detected!")
+              console.error("[POST /api/locations/register] Attempted owner_user_id:", user.id)
+              console.error("[POST /api/locations/register] Checking if this user_id exists in user_access with can_upload = true...")
+              
+              // 驗證這個 user_id 是否真的在 user_access 表中且 can_upload = true
+              const { data: verifyUser, error: verifyError } = await supabase
+                .from('user_access')
+                .select('user_id, can_upload, display_name')
+                .eq('user_id', user.id)
+                .maybeSingle()
+              
+              if (verifyError) {
+                console.error("[POST /api/locations/register] Error verifying user:", verifyError)
+              } else if (!verifyUser) {
+                console.error("[POST /api/locations/register] ❌ User not found in user_access table!")
+              } else {
+                console.error("[POST /api/locations/register] User found in user_access:", verifyUser)
+                console.error("[POST /api/locations/register] can_upload status:", verifyUser.can_upload)
+              }
         console.error("[POST /api/locations/register] User ID used:", user.id)
         console.error("[POST /api/locations/register] Please check:")
         console.error("  1. user_access table has a record for user_id:", user.id)
