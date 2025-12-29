@@ -1,19 +1,17 @@
-"use client";
-
-import { useSearchParams } from "next/navigation";
-import JobResultView from "@/components/JobResultView";
+// src/app/result/page.tsx
+import { Suspense } from "react";
+import ResultClient from "./ResultClient";
 
 export default function ResultPage() {
-  const sp = useSearchParams();
-  const jobId = sp.get("jobId");
-
-  if (!jobId) {
-    return (
-      <main className="p-6 text-center">
-        <p className="text-red-400">網址內沒有 jobId 參數。</p>
-      </main>
-    );
-  }
-
-  return <JobResultView jobId={jobId} />;
+  return (
+    <Suspense
+      fallback={
+        <main className="p-6 text-center">
+          <p>載入中…</p>
+        </main>
+      }
+    >
+      <ResultClient />
+    </Suspense>
+  );
 }
