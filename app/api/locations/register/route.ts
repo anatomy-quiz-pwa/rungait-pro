@@ -79,22 +79,29 @@ export async function POST(request: NextRequest) {
         // 方案：查詢 auth.users 表，使用第一個用戶的 UUID
         // 注意：直接查詢 auth.users 可能需要特殊權限，我們使用 Supabase Admin API 或查詢 user_access 表
         try {
-          // 嘗試查詢 user_access 表來取得一個有效的 user_id
+          // 嘗試查詢 user_access 表來取得一個有效的 user_id（且 can_upload = true）
           const { data: userAccess, error: userError } = await supabase
             .from('user_access')
-            .select('user_id')
+            .select('user_id, can_upload')
+            .eq('can_upload', true)  // 只查詢 can_upload = true 的記錄
             .limit(1)
           
           if (!userError && userAccess && userAccess.length > 0) {
-            // 使用第一個 user_access 記錄的 user_id
-            finalUserId = userAccess[0].user_id
-            console.log("[POST /api/locations/register] Using existing user_id from user_access for mock user:", finalUserId, "Original:", mockUserId)
+            // 使用第一個 user_access 記錄的 user_id（且 can_upload = true）
+            // 優先選擇 can_upload = true 的記錄
+            const userWithUpload = userAccess.find((ua: any) => ua.can_upload === true) || userAccess[0]
+            finalUserId = userWithUpload.user_id
+            console.log("[POST /api/locations/register] Using existing user_id from user_access for mock user:", finalUserId, "Original:", mockUserId, "can_upload:", userWithUpload.can_upload)
+            
+            // 如果 can_upload 不是 true，警告用戶
+            if (userWithUpload.can_upload !== true) {
+              console.warn("[POST /api/locations/register] WARNING: Selected user does not have can_upload = true. Insert may fail due to RLS policy.")
+            }
           } else {
-            // 如果無法查詢，生成一個 UUID（可能會違反外鍵約束）
-            // 這種情況下，可能需要先建立一個測試用戶
+            // 如果無法查詢，生成一個 UUID（可能會違反外鍵約束和 RLS policy）
             finalUserId = randomUUID()
-            console.warn("[POST /api/locations/register] Generated UUID for mock user (may violate FK constraint):", finalUserId, "Original:", mockUserId)
-            console.warn("[POST /api/locations/register] You may need to create a test user in auth.users table first")
+            console.error("[POST /api/locations/register] ERROR: No user_access record found. Generated UUID:", finalUserId, "Original:", mockUserId)
+            console.error("[POST /api/locations/register] This will likely fail due to RLS policy. Please ensure user_access table has records with can_upload = true")
           }
         } catch (error) {
           // 如果查詢失敗，生成一個 UUID
