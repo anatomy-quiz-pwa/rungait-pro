@@ -80,10 +80,12 @@ export async function POST(request: NextRequest) {
         // 注意：直接查詢 auth.users 可能需要特殊權限，我們使用 Supabase Admin API 或查詢 user_access 表
         try {
           // 嘗試查詢 user_access 表來取得一個有效的 user_id（且 can_upload = true）
+          // 選擇第一個有上傳權限的用戶，確保與其他表（如 jobs）使用相同的 user_id
           const { data: userAccess, error: userError } = await supabase
             .from('user_access')
-            .select('user_id, can_upload')
+            .select('user_id, can_upload, display_name')
             .eq('can_upload', true)  // 只查詢 can_upload = true 的記錄
+            .order('created_at', { ascending: false })  // 優先選擇最新的用戶
             .limit(1)
           
           if (!userError && userAccess && userAccess.length > 0) {
@@ -91,7 +93,7 @@ export async function POST(request: NextRequest) {
             // 優先選擇 can_upload = true 的記錄
             const userWithUpload = userAccess.find((ua: any) => ua.can_upload === true) || userAccess[0]
             finalUserId = userWithUpload.user_id
-            console.log("[POST /api/locations/register] Using existing user_id from user_access for mock user:", finalUserId, "Original:", mockUserId, "can_upload:", userWithUpload.can_upload)
+            console.log("[POST /api/locations/register] Using existing user_id from user_access for mock user:", finalUserId, "Original:", mockUserId, "can_upload:", userWithUpload.can_upload, "display_name:", userWithUpload.display_name || 'N/A')
             
             // 如果 can_upload 不是 true，警告用戶
             if (userWithUpload.can_upload !== true) {
