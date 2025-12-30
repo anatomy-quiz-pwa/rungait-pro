@@ -649,10 +649,10 @@ export default function JobResultView({
 
         {job.status === "done" ? (
         <div className="mt-6">
-            {/* 兩欄：md 以上左右並列；小螢幕自動上下 */}
+            {/* 兩欄：md 以上左右並列；右欄 = 左欄 1.5 倍（3:2）；小螢幕自動上下 */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
-            {/* 左欄：影片 */}
-            <div className="space-y-4">
+            {/* 左欄：影片（2/5） */}
+            <div className="md:col-span-2 space-y-4">
                 {job.result_video_r2 && base ? (
                 <video
                     ref={videoRef}
@@ -667,8 +667,8 @@ export default function JobResultView({
                 )}
             </div>
 
-            {/* 右欄：checkbox + 圖表 + 幀控制 + 下載 */}
-            <div className="space-y-4">
+            {/* 右欄：checkbox + 圖表 + 幀控制 + 下載（3/5） */}
+            <div className="md:col-span-3 space-y-4">
                 {/* Series checkbox */}
                 {chartJson && (
                 <div className="rounded-lg border border-zinc-700 bg-black/10 dark:bg-white/5 p-3">
