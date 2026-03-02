@@ -42,6 +42,12 @@ export default function HomePage() {
       href: "/analyze",
     },
     {
+      icon: Activity,
+      title: "Upload（夥伴 Sun）",
+      description: "上傳影片至 R2，由後端 YOLO 分析，查看 jobs 結果",
+      href: "/upload",
+    },
+    {
       icon: BarChart3,
       title: "Before/After Comparison",
       description: "Compare two analyses to track progress and measure improvements over time",

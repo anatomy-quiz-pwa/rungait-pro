@@ -42,6 +42,16 @@ export function AppHeader() {
                   </Button>
                 </Link>
 
+                <Link href="/upload">
+                  <Button variant="ghost" size="sm" className="text-slate-300 hover:text-slate-100">
+                    Upload
+                  </Button>
+                </Link>
+                <Link href="/single">
+                  <Button variant="ghost" size="sm" className="text-slate-300 hover:text-slate-100">
+                    Single
+                  </Button>
+                </Link>
                 <Link href="/lab">
                   <Button variant="ghost" size="sm" className="text-slate-300 hover:text-slate-100 gap-2">
                     <FlaskConical className="h-4 w-4" />

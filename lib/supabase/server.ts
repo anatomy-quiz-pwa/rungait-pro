@@ -72,3 +72,30 @@ export async function getServerUser(request?: NextRequest) {
   return user
 }
 
+/** 夥伴 Sun 相容：createSupabaseServerClient (使用 cookies) */
+export async function createSupabaseServerClient() {
+  const { cookies } = await import("next/headers")
+  const cookieStore = await cookies()
+  const { createServerClient } = await import("@supabase/ssr")
+  return createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return cookieStore.getAll()
+        },
+        setAll(cookiesToSet: { name: string; value: string; options?: Record<string, unknown> }[]) {
+          try {
+            cookiesToSet.forEach(({ name, value, options }) => {
+              cookieStore.set(name, value, options)
+            })
+          } catch {
+            // ignore in Server Component
+          }
+        },
+      },
+    }
+  )
+}
+
