@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { createClient } from "@/lib/supabase-browser"
+import { supabaseBrowser } from "@/lib/supabase-browser"
 import { Button } from "@/components/ui/button"
 import {
     Dialog,
@@ -36,7 +36,7 @@ export function LiteratureUploadModal({
     const [status, setStatus] = useState("")
     const { toast } = useToast()
     const router = useRouter()
-    const supabase = createClient()
+    const supabase = supabaseBrowser()
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const selectedFile = e.target.files?.[0]
