@@ -1,37 +1,16 @@
 "use client"
 
 import { Button } from "@/components/ui/button"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { LogIn, LogOut, User, Shield } from "lucide-react"
-import { useState } from "react"
+import { LogIn, LogOut, User, Shield, FlaskConical } from "lucide-react"
 import { useAuth } from "@/lib/auth-context"
-import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { CreditsBadge } from "@/components/billing/credits-badge"
 
 export function AppHeader() {
-  const { user, userRole, login, logout } = useAuth()
-  const [showLoginDialog, setShowLoginDialog] = useState(false)
-  const [email, setEmail] = useState("")
-  const [loginStatus, setLoginStatus] = useState<string>("")
-  const [isLoggingIn, setIsLoggingIn] = useState(false)
-  const router = useRouter()
+  const { user, userRole, logout, syncSession, isLoading, syncError, clearSyncError } = useAuth()
 
-  const handleLogin = async () => {
-    if (!email) return
-    setIsLoggingIn(true)
-    const result = await login(email)
-    setLoginStatus(result.message || "")
-    setIsLoggingIn(false)
-    if (result.success) {
-      setTimeout(() => {
-        setShowLoginDialog(false)
-        setLoginStatus("")
-        setEmail("")
-      }, 1500)
-    }
+  const handleLogout = async () => {
+    await logout()
   }
 
   return (
@@ -63,6 +42,13 @@ export function AppHeader() {
                   </Button>
                 </Link>
 
+                <Link href="/lab">
+                  <Button variant="ghost" size="sm" className="text-slate-300 hover:text-slate-100 gap-2">
+                    <FlaskConical className="h-4 w-4" />
+                    Lab
+                  </Button>
+                </Link>
+
                 {userRole === "admin" && (
                   <Link href="/admin">
                     <Button variant="ghost" size="sm" className="text-cyan-400 hover:text-cyan-300 gap-2">
@@ -82,64 +68,41 @@ export function AppHeader() {
 
                 <div className="hidden sm:flex items-center gap-2 text-sm">
                   <User className="h-4 w-4 text-slate-400" />
-                  <span className="text-slate-300">{user.email}</span>
+                  <span className="text-slate-300">{user.display_name || user.email}</span>
                 </div>
-                <Button variant="outline" size="sm" onClick={logout} className="gap-2 bg-transparent">
+                <Button variant="outline" size="sm" onClick={handleLogout} className="gap-2 bg-transparent text-slate-300 hover:text-white">
                   <LogOut className="h-4 w-4" />
                   <span className="hidden sm:inline">Logout</span>
                 </Button>
               </>
             ) : (
-              <Button onClick={() => setShowLoginDialog(true)} className="gap-2 bg-cyan-600 hover:bg-cyan-700">
-                <LogIn className="h-4 w-4" />
-                Log in
-              </Button>
+              <>
+                {syncError && (
+                  <span className="text-amber-400 text-xs mr-2 hidden sm:inline max-w-[200px] truncate" title={syncError}>
+                    {syncError}
+                  </span>
+                )}
+                {isLoading && !syncError && <span className="text-slate-500 text-sm hidden sm:inline">檢查中…</span>}
+                <button
+                  type="button"
+                  onClick={syncSession}
+                  title="Google 登入後若仍顯示未登入，請點此同步 session"
+                  className="text-slate-500 hover:text-slate-300 text-xs mr-2 hidden sm:inline"
+                >
+                  剛登入？同步
+                </button>
+                <Button asChild className="gap-2 bg-cyan-600 hover:bg-cyan-700">
+                  <Link href="/login" onClick={clearSyncError}>
+                    <LogIn className="h-4 w-4" />
+                    Log in
+                  </Link>
+                </Button>
+              </>
             )}
           </div>
         </div>
       </header>
 
-      <Dialog open={showLoginDialog} onOpenChange={setShowLoginDialog}>
-        <DialogContent className="sm:max-w-md bg-slate-900 border-slate-700">
-          <DialogHeader>
-            <DialogTitle className="text-slate-100">Sign in with Email</DialogTitle>
-            <DialogDescription className="text-slate-400">
-              Enter your email to receive a magic login link
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="email" className="text-slate-200">
-                Email Address
-              </Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="you@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleLogin()}
-                className="bg-slate-800 border-slate-700 text-slate-100"
-              />
-            </div>
-            {loginStatus && (
-              <div className="p-3 rounded-lg bg-cyan-500/10 border border-cyan-500/20">
-                <p className="text-sm text-cyan-400">{loginStatus}</p>
-              </div>
-            )}
-            <Button
-              onClick={handleLogin}
-              disabled={isLoggingIn || !email}
-              className="w-full bg-cyan-600 hover:bg-cyan-700"
-            >
-              {isLoggingIn ? "Sending..." : "Send Login Link"}
-            </Button>
-            <p className="text-xs text-slate-500 text-center">
-              By continuing, you agree to our Terms of Service and Privacy Policy
-            </p>
-          </div>
-        </DialogContent>
-      </Dialog>
     </>
   )
 }

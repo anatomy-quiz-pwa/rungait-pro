@@ -1,15 +1,17 @@
 "use client"
 
+import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
-import { Activity, BarChart3, FileText, Library } from "lucide-react"
+import { Activity, BarChart3, FileText, FileUp, Library, FlaskConical } from "lucide-react"
 import { FeatureCard } from "@/components/home/feature-card"
 import { useAuth } from "@/lib/auth-context"
 import { useI18n } from "@/lib/i18n/i18n-provider"
 import { useState } from "react"
 import { HeroCTA } from "@/components/home/hero-cta"
 import { MapTeaser } from "@/components/home/map-teaser"
+import { LiteratureUploadModal } from "@/components/literature/upload-modal"
 import { getHealth } from "@/lib/api"
 
 export default function HomePage() {
@@ -37,29 +39,31 @@ export default function HomePage() {
       icon: Activity,
       title: "Single Analysis",
       description: "Upload and analyze a single running video with detailed biomechanical assessment",
-      action: () => router.push("/analyze"),
-      color: "cyan",
+      href: "/analyze",
     },
     {
       icon: BarChart3,
       title: "Before/After Comparison",
       description: "Compare two analyses to track progress and measure improvements over time",
-      action: () => router.push("/compare"),
-      color: "blue",
+      href: "/compare",
     },
     {
       icon: FileText,
       title: "Clinical Reports",
       description: "Generate print-friendly clinical reports with findings and recommendations",
-      action: () => router.push("/report/1"),
-      color: "purple",
+      href: "/report/1",
     },
     {
       icon: Library,
       title: "Analysis Library",
       description: "Browse and manage your saved gait analyses in one organized place",
-      action: () => router.push("/library"),
-      color: "pink",
+      href: "/library",
+    },
+    {
+      icon: FlaskConical,
+      title: "Lab (A/B 分析)",
+      description: "上傳 Before/After 影片，串接 YOLO API 產生智慧比較報告",
+      href: "/lab",
     },
   ]
 
@@ -73,6 +77,35 @@ export default function HomePage() {
           </p>
 
           <HeroCTA />
+
+          {/* 文獻 PDF 上傳：直接嫁接在首頁，雲端/Vercel 也可用 */}
+          <div className="mt-4 flex flex-col items-center gap-2">
+            {user ? (
+              <LiteratureUploadModal>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="lg"
+                  className="border-emerald-600 text-emerald-400 hover:bg-emerald-600/10 text-lg px-8 py-6 gap-3"
+                >
+                  <FileUp className="h-5 w-5" />
+                  上傳文獻 PDF
+                </Button>
+              </LiteratureUploadModal>
+            ) : (
+              <Link href="/login">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="lg"
+                  className="border-slate-500 text-slate-400 hover:bg-slate-800 text-lg px-8 py-6 gap-3"
+                >
+                  <FileUp className="h-5 w-5" />
+                  登入後可上傳文獻 PDF
+                </Button>
+              </Link>
+            )}
+          </div>
 
           <div className="mt-6 flex flex-col items-center gap-3">
             <Button
@@ -90,29 +123,31 @@ export default function HomePage() {
           {features.map((feature) => {
             const Icon = feature.icon
             return (
-              <Card
+              <a
                 key={feature.title}
-                className="p-6 bg-slate-900/50 border-slate-700 hover:border-cyan-500/50 transition-all cursor-pointer group"
-                onClick={feature.action}
+                href={feature.href}
+                className="block h-full w-full rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0B0F12] cursor-pointer no-underline text-inherit"
               >
-                <div className="flex items-start gap-4">
-                  <div className="p-3 rounded-xl bg-cyan-500/10 group-hover:bg-cyan-500/20 transition-colors">
-                    <Icon className="h-6 w-6 text-cyan-400" />
+                <Card className="h-full p-6 bg-slate-900/50 border-slate-700 hover:border-cyan-500/50 transition-all group">
+                  <div className="flex items-start gap-4">
+                    <div className="p-3 rounded-xl bg-cyan-500/10 group-hover:bg-cyan-500/20 transition-colors">
+                      <Icon className="h-6 w-6 text-cyan-400" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-xl font-semibold mb-2 group-hover:text-cyan-400 transition-colors">
+                        {feature.title}
+                      </h3>
+                      <p className="text-slate-400 text-sm leading-relaxed">{feature.description}</p>
+                      <span
+                        className="mt-4 inline-flex items-center text-cyan-400 group-hover:text-cyan-300 rounded px-1 -mx-1"
+                        aria-hidden
+                      >
+                        Get Started →
+                      </span>
+                    </div>
                   </div>
-                  <div className="flex-1">
-                    <h3 className="text-xl font-semibold mb-2 group-hover:text-cyan-400 transition-colors">
-                      {feature.title}
-                    </h3>
-                    <p className="text-slate-400 text-sm leading-relaxed">{feature.description}</p>
-                    <Button
-                      variant="ghost"
-                      className="mt-4 text-cyan-400 hover:text-cyan-300 hover:bg-cyan-500/10 p-0 h-auto"
-                    >
-                      Get Started →
-                    </Button>
-                  </div>
-                </div>
-              </Card>
+                </Card>
+              </a>
             )
           })}
         </div>
